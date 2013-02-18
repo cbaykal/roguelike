@@ -1,0 +1,14 @@
+{
+	"name": "Roguelike Game",
+	"description": "Game created by CS at UNC",
+	"version": "1.0",
+	"manifest_version": 2,
+	"app": {
+		"urls": [
+			"http://www.unc.edu/~baykal/roguelike/index.html"
+		],
+		"launch": {
+			"web_url": "http://www.unc.edu/~baykal/roguelike/index.html"
+		}
+	}
+}
