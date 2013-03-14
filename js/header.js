@@ -308,6 +308,87 @@ Animation.prototype.reanimate = function(ctx) {
     this.elapsedTime = 0;
     this.startTime = window.performance.now();
 }
+
+function Dungeon(game, enemyProbability, miscProbability) {
+    this.game = game;
+   // this.percentWalls = percentWalls;
+    this.enemyProbability = enemyProbability; // enemy probability per free space
+    this.miscProbability = miscProbability;
+    this.map = [[]]; // two-dimensional array (x,y coordinates)
+    this.tileSize = 48;
+    this.tile = ASSET_MANAGER.getAsset('images/caveTiles.png');
+}
+
+// use a two dimensional array to keep track of the initial objects and entities in the dungeon
+Dungeon.prototype.generateDungeon = function() {
+    var numTilesX = Math.ceil(this.game.frameWidth/this.tileSize),
+        numTilesY = Math.ceil(this.game.frameHeight/this.tileSize);
+        
+    for (var i = 0; i < numTilesX; ++i) {
+        this.map[i] = [];
+        for (var j = 0; j < numTilesY; ++j) {
+           // F for free space, W for Wall
+           this.map[i][j] = i == 0 || i == numTilesX - 1 || j == 0 || j == numTilesY - 1 ? 'W' : 'F';
+           if(i === numTilesX - 2 && j === 0) {
+                this.map[i][j] = 'E'; // E for exit
+           }
+           
+        }
+    }
+    
+    // as soon as we are done, let's generate the necessary entities (i.e. enemies, fire, etc.)
+    this.generateEntities();
+}
+
+// generate the entities based on the map array generated previously
+Dungeon.prototype.generateEntities = function() {
+    for (var i = 0; i < this.map.length; ++i) {
+        for (var j = 0; j < this.map.length; ++j) {
+            if (i === 0 && j === 0 || this.map[i][j] !== 'F') { continue; } // that is where we are placing our hero
+            
+            var rand = Math.random()*101, // random number from 0 to 100
+                xPos = i*this.tileSize >= this.game.frameWidth - 64 ? this.game.frameWidth : i*this.tileSize,
+                yPos = j*this.tileSize >= this.game.frameHeight - 64 ? this.game.frameHeight : j*this.tileSize;
+                
+            if (rand <= this.enemyProbability) {
+                this.game.addEntity(new Fire(this.game, xPos, yPos, 64, 64));
+            } else if (rand >= 100 - this.miscProbability) {
+                this.game.addEntity(new Ogre(this.game, xPos, yPos, 32, 48));
+            }
+         }
+     }
+}
+
+Dungeon.prototype.drawExit = function(x, y) {
+    this.game.ctx.clearRect(x, y, this.tileSize, this.tileSize);
+}
+
+Dungeon.prototype.drawTile = function(x, y) {
+     this.game.ctx.drawImage(this.tile, 0, this.tileSize, this.tileSize, this.tileSize, x, y, this.tileSize, this.tileSize);
+}
+
+Dungeon.prototype.drawWall = function(x, y) {
+    this.game.ctx.drawImage(this.tile, 0, 0, this.tileSize, this.tileSize, x, y, this.tileSize, this.tileSize);
+}
+
+// draw walls and free space for the dungeon; the entities will be drawn in their own respective draw functions
+Dungeon.prototype.drawDungeon = function() {
+    for (var i = 0; i < this.map.length; ++i) {
+        for (var j = 0; j < this.map.length; ++j) {
+            switch (this.map[i][j]) {
+                case 'F': // free space
+                    this.drawTile(i*this.tileSize, j*this.tileSize);
+                    break;
+                case 'W': // need to draw a wall
+                    this.drawWall(i*this.tileSize, j*this.tileSize);
+                    break;
+                case 'E': // need to draw the exit
+                    this.drawExit(i*this.tileSize, j*this.tileSize);
+            }
+        }
+    }
+}
+
 // code for the game engine which will handle the heavy lifting
 function GameEngine(ctx) {
     this.ctx = ctx;
@@ -317,6 +398,7 @@ function GameEngine(ctx) {
     this.now = window.performance.now(); // keep track of time
     this.key = null; // will keep track of direction of our hero (via key events)
     this.previousKey = null; // keep track of previously pressed key to avoid "sticky" keys
+    this.dungeon = null;
 }
 
 GameEngine.prototype.addEntity = function(entity) {
@@ -337,8 +419,7 @@ GameEngine.prototype.loop = function() {
 GameEngine.prototype.draw = function() {
     // we need to clear the canvas first
     this.ctx.clearRect(0, 0, this.frameWidth, this.frameHeight);
-    this.ctx.fillStyle = 'blue';
-    this.ctx.fillRect(0, 0, game.frameWidth, game.frameHeight);
+    this.dungeon.drawDungeon();
     // ultimately we would redraw all the entities...
     this.entities.forEach(function(entity) {
         entity.draw(this.ctx);
@@ -358,36 +439,13 @@ GameEngine.prototype.update = function() {
 }
 
 GameEngine.prototype.init = function() {
-    // initialize main characters...
-    for (var i = 0; i < 2; i++) {
-        this.addEntity(new Fire(this, Math.floor(Math.random() * (game.frameWidth - 32)), Math.floor(Math.random() * (game.frameHeight - 32)), 64, 64));
-        this.addEntity(new Ogre(this, Math.floor(Math.random() * (game.frameWidth - 32)), Math.floor(Math.random() * (game.frameHeight - 48)), 32, 48, 0, Math.floor(Math.random() * 300)));
-    }
-
-    // TODO: Add our hero here
+    this.dungeon = new Dungeon(this, 2, 1); // new dungeon with enemy probability of 10% per free space
+    this.dungeon.generateDungeon();
     // (x, y) = (0, 0), width = 64, height = 64
-    this.addEntity(new Hero(this, 0, 0, 64, 64));
+    this.addEntity(new Hero(this, 60, this.frameHeight - 90, 64, 64));
 
     // let's start tracking input
     this.trackEvents();
-}
-
-GameEngine.prototype.trackEvents = function() {
-    var that = this;
-    window.addEventListener('keydown', function(e) {
-        that.previousKey = that.key;
-        that.key = e.keyCode || e.which;
-        e.preventDefault();
-    }, false);
-    
-    window.addEventListener('keyup', function(e) {
-        var keyCode = e.keyCode || e.which;
-        // the released key is the previous key, so obviously don't make it the current key
-        if(!(keyCode === that.previousKey) || that.previousKey === that.key) { 
-            that.key = that.previousKey === that.key ? null : that.previousKey;
-        }
-        that.previousKey = null;
-    }, false);
 }
 
 GameEngine.prototype.start = function() {
@@ -412,6 +470,24 @@ GameEngine.prototype.start = function() {
     // let's make it call itself and get the ball rolling...
 }
 
+GameEngine.prototype.trackEvents = function() {
+    var that = this;
+    window.addEventListener('keydown', function(e) {
+        that.previousKey = that.key;
+        that.key = e.keyCode || e.which;
+        e.preventDefault();
+    }, false);
+    
+    window.addEventListener('keyup', function(e) {
+        var keyCode = e.keyCode || e.which;
+        // the released key is the previous key, so obviously don't make it the current key
+        if(!(keyCode === that.previousKey) || that.previousKey === that.key) { 
+            that.key = that.previousKey === that.key ? null : that.previousKey;
+        }
+        that.previousKey = null;
+    }, false);
+}
+
 GameEngine.prototype.getLoadingScreen = function() {
     // let's render in an off-screen canvas to improve performance
     game.ctx.save();
@@ -424,10 +500,18 @@ GameEngine.prototype.getLoadingScreen = function() {
     ctx.fillText('Loading assets... Please wait', 0, 50);
     return canv; // return the canvas
 }
-var ASSET_MANAGER = new AssetManager(), game;
 
+var ASSET_MANAGER = new AssetManager(), 
+    canvas,
+    game;
+    
 window.addEventListener('load', function() {
-    game = new GameEngine(document.getElementById('canvas').getContext('2d'));
+    // set canvas width to occupy the whole page
+    canvas =  document.getElementById('canvas');
+    /*canvas.width = document.width;
+    canvas.height = document.height;*/
+    
+    game = new GameEngine(canvas.getContext('2d'));
     var lCanv = game.getLoadingScreen();
     // display the loading screen while we load assets
     game.ctx.drawImage(lCanv, (game.frameWidth - lCanv.width) / 2, (game.frameHeight - lCanv.height) / 2);
@@ -435,6 +519,7 @@ window.addEventListener('load', function() {
     ASSET_MANAGER.queueDownload('images/fire.png');
     ASSET_MANAGER.queueDownload('images/monsters.png');
     ASSET_MANAGER.queueDownload('images/hero.png');
+    ASSET_MANAGER.queueDownload('images/caveTiles.png');
     ASSET_MANAGER.queueSound('song.mp3');
     // TODO: Also preload all of the sounds that we will use in the game
     ASSET_MANAGER.downloadAll(function() {
