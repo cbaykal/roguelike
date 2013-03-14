@@ -1,0 +1,14 @@
+CACHE MANIFEST
+# 3
+CACHE:
+images/fire.png
+images/monsters.png
+images/hero.png
+
+song.mp3
+
+js/header.js
+index.html
+
+NETWORK:
+*
