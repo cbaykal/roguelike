@@ -143,10 +143,17 @@ AnimatedEntity.prototype.draw = function(offsetX, offsetY) {
         offsetX = typeof offsetX === 'undefined' ? 0 : offsetX;
         offsetY = typeof offsetY === 'undefined' ? 0 : offsetY;
         this.game.ctx.drawImage(this.image, offsetX, offsetY, this.width, this.height, this.x, this.y, this.scaleToX, this.scaleToY);
+        
     }
 }
 
 AnimatedEntity.prototype.update = function() {
+}
+
+AnimatedEntity.prototype.getDeltaPosition = function() {
+    var elapsedTime = (this.game.now - this.lastUpdateTime);
+    
+    return elapsedTime > 30 ? 0 : Math.round(elapsedTime / 1000 * this.VELOCITY); // to avoid wormholes
 }
 
 // check the proposed x and y bounds and see whether we can move there
@@ -154,12 +161,19 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY) {
     
     // let's check the map array to see whether the new location is free or not
     var adjustedCoords = this.getAdjustedCoords(newX, newY);
-    
+   /* debug({
+        newX:newX,
+        newY:newY,
+        x:adjustedCoords.x,
+        y:adjustedCoords.y
+    });*/
     // gets the corresponding tile number (i and j) for use in retrieval in map
     var i = Math.floor(adjustedCoords.x/this.game.dungeon.tileSize), 
         j = Math.floor(adjustedCoords.y/this.game.dungeon.tileSize); 
-        
-    if(this.game.dungeon.map[i][j] === 'W') {
+
+    if(i <= 0 || j <= 0 || 
+        i >= Math.floor(this.game.frameWidth) || j >= Math.floor(this.game.frameHeight) ||
+        this.game.dungeon.map[i][j] === 'W' ) {
         return false; // there's a wall, so obviously can't move there
     }
     
@@ -170,8 +184,8 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY) {
     // for most accurate collision detecting (and natural looking), I am going to iterate over the Entities
     for (var i = 0; i < this.game.entities.length; ++i) {
         var entity = this.game.entities[i];
-        // obviously don't check to see whether the Hero is colliding with itself
-        if (entity.constructor.name === 'Hero') { 
+        // obviously don't check to see whether the entity is colliding with itself 
+        if (this === entity) { 
             continue; 
         }
         
@@ -192,8 +206,6 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY) {
         }
         
         if (heroRect.isIntersecting(entityRect)) {
-            console.log(heroRect);
-            console.log(entityRect);
             return false;
         }
     }
@@ -240,6 +252,7 @@ function Hero(game, x, y, width, height) {
     this.offsetY = 518; // this will change depending on the direction; 518 is for the sprite in going in the upward direction (default)
     this.scaleToX = 38
     this.scaleToY = 42;
+    this.direction = "up";
     this.VELOCITY = 100;
 }
 
@@ -254,7 +267,8 @@ Hero.prototype.draw = function() {
 Hero.prototype.update = function() {
     // && (!this.game.previousKey || this.game.previousKey === this.game.key) 
     var delta = this.game.now ? this.getDeltaPosition() : 0,
-        baseOffsetY = 518;
+        baseOffsetY = 518,
+        punchOffset = 514;
         
     switch(this.game.key) {
         case 38: // up
@@ -277,17 +291,31 @@ Hero.prototype.update = function() {
             this.offsetY = baseOffsetY + this.height*3;
             this.direction = 'right';
             break;         
+        case 32: // space (to punch)
+            // prevent a bug where pressing the space bar triggers a tremendous offset (since it gets invoked twice)
+            // realign the offset of the sprite
+            this.offsetY = punchOffset + this.offsetY > baseOffsetY + punchOffset + this.height*3 ? this.offsetY : punchOffset + this.offsetY;
+            this.direction = "punch";
+            break;
         default:
             this.game.key = null;
             this.game.previousKey = null;
     }
     
-    if(!this.game.key && this.animation) { // hero is currently animated, but no key is pressed => end animation
+    if(!this.game.key && this.animation && this.direction !== 'punch') { // hero is currently animated, but no key is pressed => end animation
         this.animation = null;
     } else if((this.game.key && !this.animation) || (this.animation && this.direction !== this.animation.direction)) { // key is pressed, but no animation is present => start animation
-        this.animation = new Animation(this.image, this.width, this.height, 8, 0.5, this.game.now, this.offsetX, this.offsetY);
+        this.animation = this.direction === 'punch' ? 
+                        new Animation(this.image, this.width, this.height, 11, 2/3, this.game.now, this.offsetX, this.offsetY, false) :
+                        new Animation(this.image, this.width, this.height, 8, 0.5, this.game.now, this.offsetX, this.offsetY);
+                        
         this.animation.direction = this.direction;
-    } /*else if() { // key is pressed, and an animation is going on => TRICKY
+    } else if(this.direction === 'punch' && this.animation && this.animation.isDone()) {
+        this.animation = null;
+        //this.offsetY -= 514;
+    }
+  
+    /*else if() { // key is pressed, and an animation is going on => TRICKY
         // Normally, we don't have to do anything here, as the animation instance takes care of the animating
         // but, what if the user was pressing one arrow key to go one direction, and then *concurrently* pressed
         // another key? Well, the direction changes accordingly, since that's the last button pressed, but we have
@@ -300,92 +328,179 @@ Hero.prototype.update = function() {
     this.lastUpdateTime = this.game.now;
 }
 
-Hero.prototype.getDeltaPosition = function() {
-    var elapsedTime = (this.game.now - this.lastUpdateTime);
-    return elapsedTime > 30 ? 0 : Math.round(elapsedTime / 1000 * this.VELOCITY); // to avoid wormholes
+function Enemy(game, x, y, width, height) {
+    AnimatedEntity.call(this, game, x, y, width, height);
+    this.image = null;
+    this.animation = null;
+    this.offsetX = 0;
+    this.offsetY = 0;
+    this.scaleToX = 0;
+    this.scaleToY = 0;
+    this.baseOffsetY = 0; // for sprite positioning
+    this.direction = "";
+    this.aStar = {}; // will determine the path to follow to reach hero
+    this.initHeroPosition = {}; // keep track of the initial hero position in case we need to adjust path
+    
+    this.wandering = false;
+    this.wanderingDelta = 0; // keep track of how much it has wandered
+    this.VELOCITY = 40;
+    this.DISTANCE_THRESHOLD = 0; // if the hero is within this distance, attack him
+    this.WANDER_PROBABILITY = 1e-3;
+}
+
+Enemy.prototype = new AnimatedEntity();
+Enemy.prototype.constructor = Enemy;
+
+Enemy.prototype.update = function() {
+    var delta,
+        skipY = 64;
+        
+    if(this.game.now && this.game.dungeon.map) {
+        delta = this.getDeltaPosition();
+        this.wanderAround(delta);
+    } else {
+        return;
+    }
+
+    if(this.canAttackHero() || this.wandering) {
+        this.direction = this.wandering ? this.direction : this.getDirection();
+        switch(this.direction) {
+            case 'up':
+                if(this.wandering && !this.isPathClear(this.x, this.y - delta)) {
+                    this.wandering = false;
+                } else {
+                    this.y -= delta;
+                }
+                this.offsetY = this.baseOffsetY + skipY*3;
+                break;
+                
+            case 'down':
+               if(this.wandering && !this.isPathClear(this.x, this.y + delta)) {
+                    this.wandering = false;
+                } else {
+                    this.y += delta;
+                }
+                this.offsetY = this.baseOffsetY;
+                break;
+                
+            case 'right':
+                if(this.wandering && !this.isPathClear(this.x + delta, this.y)) {
+                    this.wandering = false;
+                } else {
+                    this.x += delta;
+                }
+                this.offsetY = this.baseOffsetY + skipY*2;
+                break;
+                
+            case 'left':
+                if(this.wandering && !this.isPathClear(this.x - delta, this.y)) {
+                    this.wandering = false;
+                } else {
+                    this.x -= delta;
+                }
+                this.offsetY = this.baseOffsetY + skipY;
+                break;
+        }
+        
+        if(this.game.now) {
+            this.animation = this.animation && this.direction === this.animation.direction ? this.animation :
+                        new Animation(this.image, this.width, this.height, 3, 1.0, this.game.now, this.offsetX, this.offsetY);
+            this.animation.direction = this.direction;
+            
+        }
+        
+        if(this.wandering) {
+            this.wanderingDelta += delta;
+        }
+    } else {
+        this.animation = null;
+        this.aStar = null;
+    }
+    
+    this.lastUpdateTime = this.game.now;
+}
+
+// get the direction to move based on A* path planning
+Enemy.prototype.getDirection = function() {
+    return this.direction;
+}
+
+// have the enemy move around to make it look more alive
+Enemy.prototype.wanderAround = function(delta) {
+    var rand = Math.random(),
+        walkDist = Math.ceil(Math.random()*50);
+        
+    if(this.canAttackHero()) {
+        return;
+    } else if(this.wandering) { // don't really need an else-if here, but it looks more structured this way
+        if(this.wanderingDelta >= walkDist) {
+            this.wandering = false;
+        }
+    }
+        
+    if(rand <= this.WANDER_PROBABILITY) {
+        var r = Math.random();
+        if(r >= 0 && r < 0.25) {
+            this.direction = 'right';
+        } else if(r >= 0.25 && r < 0.5) {
+            this.direction = 'left';
+        } else if(r >= 0.5 && r < 0.75) {
+            this.direction = 'down';
+        } else {
+            this.direction = 'up';
+        }
+        
+        this.wandering = true;
+        this.wanderingDelta = 0;
+    }
+}
+
+Enemy.prototype.canAttackHero = function() {
+    var distance = Math.sqrt(Math.pow(this.x - this.game.hero.x, 2) + Math.pow(this.y - this.game.hero.y, 2));
+    return distance <= this.DISTANCE_THRESHOLD;
 }
 
 function Ogre(game, x, y, width, height) {
-    AnimatedEntity.call(this, game, x, y, width, height);
+    Enemy.call(this, game, x, y, width, height);
     this.image = ASSET_MANAGER.getAsset('images/monsters.png');
     this.offsetX = 0;
-    this.offsetY = 23;
+    this.offsetY = 13;
+    this.baseOffsetY = 13;
     this.scaleToX = 24; // 32
     this.scaleToY = 24; // 38
-    this.VELOCITY = 20;
+    this.VELOCITY = 40;
+    this.DISTANCE_THRESHOLD = 100; // if the hero is within this distance, attack him
 }
 
 // set AnimatedEntity as parent class
-Ogre.prototype = new AnimatedEntity();
+Ogre.prototype = new Enemy();
 Ogre.prototype.constructor = Ogre;
 
 // override instance method of the parent class
 Ogre.prototype.draw = function() {
-    AnimatedEntity.prototype.draw.call(this, this.offsetX, this.offsetY);
-}
-
-Ogre.prototype.update = function() {
-    // HACK: skip over the standing sprite during the walk
-    /*  var index = this.animation.getFrameIndex();
-     if(index) {
-     this.animation.offsetX = 0;
-     } else {
-     this.animation.offsetX = index !== this.animation.frames - 1 ? this.animation.width: -this.animation.width;
-     }*/
-    if(!this.animation && this.canAttackHero() && this.game.now) {
-        this.animation = new Animation(this.image, this.width, 
-                                       this.height, 3, 0.75, this.game.now, this.offsetX, this.offsetY);
-    } else {
-       // console.log(this);
-    }
-
-    AnimatedEntity.prototype.update.call(this);
-}
-
-Ogre.prototype.canAttackHero = function() {
-    return true;
+    Enemy.prototype.draw.call(this, this.offsetX, this.offsetY);
 }
 
 function Skeleton(game, x, y, width, height) {
-    AnimatedEntity.call(this, game, x, y, width, height);
+    Enemy.call(this, game, x, y, width, height);
     this.image = ASSET_MANAGER.getAsset('images/monsters.png');
     // width: 32, height: 48, frames: 3, timePerAnimation: 0.75 seconds, offsetX: 0, offsetY: 23
     this.offsetX = 98;
     this.offsetY = 13;
+    this.baseOffsetY = 13;
     this.scaleToX = 24;
     this.scaleToY = 24;
-    this.VELOCITY = 20;
+    this.VELOCITY = 40;
+    this.DISTANCE_THRESHOLD = 100;
 }
 
 // set AnimatedEntity as parent class
-Skeleton.prototype = new AnimatedEntity();
+Skeleton.prototype = new Enemy();
 Skeleton.prototype.constructor = Skeleton;
 
 // override instance method of the parent class
 Skeleton.prototype.draw = function() {
-    AnimatedEntity.prototype.draw.call(this, this.offsetX, this.offsetY);
-}
-
-Skeleton.prototype.update = function() {
-    // HACK: skip over the standing sprite during the walk
-    /*  var index = this.animation.getFrameIndex();
-     if(isNaN(index)) {
-     this.animation.offsetX = 0;
-     } else {
-     this.animation.offsetX = index !== this.animation.frames - 1 ? this.animation.width: -this.animation.width;
-     }*/
-    if(!this.animation && this.canAttackHero() && this.game.now) {
-        this.animation = new Animation(this.image, this.width, 
-                                       this.height, 3, 0.75, this.game.now, this.offsetX, this.offsetY);
-    } else {
-       // console.log(this);
-    }
-
-    AnimatedEntity.prototype.update.call(this);
-}
-
-Skeleton.prototype.canAttackHero = function() {
-    return true;
+    Enemy.prototype.draw.call(this, this.offsetX, this.offsetY);
 }
 
 // Miscellaneous objects such as fire, or a rock...
@@ -401,7 +516,7 @@ function Fire(game, x, y, width, height) {
 Fire.prototype = new AnimatedEntity();
 Fire.prototype.constructor = Fire;
 
-function Animation(sprite, width, height, frames, timePerAnimation, startTime, offsetX, offsetY) {
+function Animation(sprite, width, height, frames, timePerAnimation, startTime, offsetX, offsetY, repeat) {
     this.sprite = sprite;
     this.width = width;
     this.height = height;
@@ -412,14 +527,15 @@ function Animation(sprite, width, height, frames, timePerAnimation, startTime, o
     // optional arguments
     this.offsetX = ( typeof offsetX === 'undefined') ? 0 : offsetX;
     this.offsetY = ( typeof offsetY === 'undefined') ? 0 : offsetY;
+    this.repeat = typeof repeat === 'undefined' ? true : repeat;
 }
 
 Animation.prototype.animate = function(ctx, currentTime, x, y, scaleToX, scaleToY) {
     this.elapsedTime = currentTime - this.startTime;
-    if (this.isDone()) {
+    if (this.isDone() && this.repeat) {
         this.reanimate(ctx); // let's play it again
     }
-    var index = this.getFrameIndex(); // get the current index = elapsedTime/timePerFrame
+    var index = this.getFrameIndex();  // get the current index = elapsedTime/timePerFrame
     ctx.drawImage(this.sprite, index * this.width + this.offsetX, this.offsetY, this.width, this.height, x, y, scaleToX, scaleToY);
 }
 
@@ -467,12 +583,35 @@ Dungeon.prototype.generateDungeon = function() {
     }
 }
 
+// return wall based on a sample dungeon
+Dungeon.prototype.isWall = function(i, j, numTilesX, numTilesY) {
+    // enclosing rectangular walls for the cave
+    if ((i === 0 || i === numTilesX - 1 || j === 0 || j === numTilesY - 1) ||
+        (i === 4 && j > 8) ||
+        (i >= 4 && i <= 15 && j === 8) ||
+        (i === 15 && j >= 8 && j <= 20) ||
+        (i >= 15 && i <= 20 && j === 20) ||
+        (i === 20 && j >= 2 && j <= 20) || 
+        (i > 20 && i < 35 && j === 2) ||
+        (i === 35 && j >= 2 && j <= 9) ||
+        (i === 40 && j > 0 && j <= 12) ||
+        (i >= 23 && i <= 40 && j === 12) ||
+        (i === 23 && j >= 12 && j <= 22) ||
+        (i >= 23 && i <= 44 && j === 22) ||
+        (i === 44 && j > 10 && j <= 22)) { 
+            
+        return true;
+    } 
+        
+}
 // generate the entities based on the map array generated previously
 Dungeon.prototype.generateObject = function(i, j, numTilesX, numTilesY) {
     
-    if (i === 0 || i === numTilesX - 1 || j === 0 || j === numTilesY - 1) { // enclosing rectangular walls for the cave
+    if (this.isWall(i, j, numTilesX, numTilesY)) {
         return 'W'; // 'W' for Wall
-    } else if (i <= 1 && j == numTilesY - 2) { // this is where we are placing our hero, so make sure it is free (no other entity there)
+    }
+    
+    if (i <= 1 && j == numTilesY - 2) { // this is where we are placing our hero, so make sure it is free (no other entity there)
         return 'F'; 
     } else if (i === numTilesX - 2 && j === 0) { // place the exit at the top right of the screen
         return 'O'; // 'O' for 'Out'; I wanted to save 'E' for Enemy
@@ -591,6 +730,7 @@ function GameEngine(ctx) {
     this.key = null; // will keep track of direction of our hero (via key events)
     this.previousKey = null; // keep track of previously pressed key to avoid "sticky" keys
     this.dungeon = null;
+    this.hero = null; // keep track of the hero for path planning purposes
 }
 
 GameEngine.prototype.addEntity = function(entity) {
@@ -641,16 +781,18 @@ GameEngine.prototype.update = function() {
         // update the dungeon map to store the entity's new position in the map array
         // this.dungeon.updateMap(entity, oldPosition);
         /*
-         * Note: updating the map really seems to be more trouble than its worth with the given sprites...
+         * Note: updating the map really seems to be more trouble than its worth...
          */
     }, this);
 }
 
 GameEngine.prototype.init = function() {
-    this.dungeon = new Dungeon(this, 2, 1); // new dungeon with enemy probability of 10% per free space
+    this.dungeon = new Dungeon(this, 1e-1, 1e-2); // new dungeon with enemy probability of 10% per free space
     this.dungeon.generateDungeon();
     // (x, y) = (0, 0), width = 64, height = 64
-    this.addEntity(new Hero(this, 60, this.frameHeight - 95, 64, 64));
+    var hero = new Hero(this, 60, this.frameHeight - 95, 64, 64);
+    this.addEntity(hero);
+    this.hero = hero;
 
     // let's start tracking input
     this.trackEvents();
