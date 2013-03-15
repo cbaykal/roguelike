@@ -151,36 +151,84 @@ AnimatedEntity.prototype.update = function() {
 
 // check the proposed x and y bounds and see whether we can move there
 AnimatedEntity.prototype.isPathClear = function(newX, newY) {
-    // let's check the map array to see if it is free or not
-    // switch statement in case I want to add more cases in the future
-    debug({
-        x: newX,
-        y: newY,
-        obj: this.getObjectAtPoint(newX, newY)
-    });
-    if (this.getObjectAtPoint(newX, newY) === 'F') {
-        return true;
-    } else {
-        return false;
-    }
-     /*   case 'F': // free
-            return true;
-        default: 
-            return false;
-    }*/
     
+    // let's check the map array to see whether the new location is free or not
+    var adjustedCoords = this.getAdjustedCoords(newX, newY);
+    
+    // gets the corresponding tile number (i and j) for use in retrieval in map
+    var i = Math.floor(adjustedCoords.x/this.game.dungeon.tileSize), 
+        j = Math.floor(adjustedCoords.y/this.game.dungeon.tileSize); 
+        
+    if(this.game.dungeon.map[i][j] === 'W') {
+        return false; // there's a wall, so obviously can't move there
+    }
+    
+    // going to be using a rectangle algorithm to detect collisions
+    var heroRect = null, 
+        entityRect = null;
+        
+    // for most accurate collision detecting (and natural looking), I am going to iterate over the Entities
+    for (var i = 0; i < this.game.entities.length; ++i) {
+        var entity = this.game.entities[i];
+        // obviously don't check to see whether the Hero is colliding with itself
+        if (entity.constructor.name === 'Hero') { 
+            continue; 
+        }
+        
+        // rectangle for the entity
+        // Note: we define the retangle's top left corner as y + height/2 or y + height*1/5 because we want to represent the blocking point
+        // as the feet of the skeleton to make the collisions look more natural
+        entityRect = new Rectangle(entity.x, entity.x + entity.scaleToX, entity.y + entity.scaleToY*(1/5), entity.y + entity.scaleToY);
+        switch(this.direction) {
+            case 'up':
+            case 'left':
+            case 'down':
+            case 'right':
+                heroRect = new Rectangle(newX, newX + this.scaleToX*3/4, newY + this.scaleToY/2, newY + this.scaleToY);
+                break;
+            case 'right':
+                //heroRect = new Rectangle(newX, newX + this.scaleToX/2, newY, newY + this.scaleToY/2);
+                break;
+        }
+        
+        if (heroRect.isIntersecting(entityRect)) {
+            console.log(heroRect);
+            console.log(entityRect);
+            return false;
+        }
+    }
+    
+    return true;
 }
 
-AnimatedEntity.prototype.getObjectAtPoint = function(x, y) {
-    // gets the corresponding tile number (i and j) for use in retrieval in map
-    var i = Math.floor(x/this.game.dungeon.tileSize), 
-        j = Math.floor(y/this.game.dungeon.tileSize); 
-   /* debug({
-        game: this.game,
-        dungeon: this.game.dungeon,
-        map: this.game.dungeon.map
-    });*/
-    return this.game.dungeon.map[i][j];
+// in most cases, we have to adjust the coordinates accordingly 
+// for the collision detection to look more natural
+AnimatedEntity.prototype.getAdjustedCoords = function(newX, newY) {
+    var x = null,
+        y = null;
+        
+    switch(this.direction) {
+        case 'up': // most natural way to do is to take the character's center
+            x = newX + this.scaleToX/2;
+            y = newY + this.scaleToY/2;
+            break;
+        case 'down': // consider the midpoint of the feet
+            x = newX + this.scaleToX/2;
+            y = newY + this.scaleToY;
+            break;
+        case 'right': // take the rightmost point of the feet
+            x = newX + this.scaleToX;
+            y = newY + this.scaleToY;
+            break;
+        case 'left': // leftmost point of the feet
+            x = newX;
+            y = newY + this.scaleToY;
+    }
+    
+    return {
+        x: x,
+        y: y
+    };
 }
 
 // Class for our game's hero!
@@ -211,20 +259,23 @@ Hero.prototype.update = function() {
     switch(this.game.key) {
         case 38: // up
             this.y -= this.isPathClear(this.x, this.y - delta) ? delta : 0;
-            console.log(this.isPathClear(this.x, this.y - delta));
             this.offsetY = baseOffsetY;
+            this.direction = 'up';
             break;
         case 40: // down
-            this.y += this.isPathClear(this.x, this.y + delta + this.scaleToY) ? delta : 0;
+            this.y += this.isPathClear(this.x, this.y + delta) ? delta : 0;
             this.offsetY = baseOffsetY + this.height * 2;
+            this.direction = 'down';
             break;
         case 37: // left
             this.x -= this.isPathClear(this.x - delta, this.y) ? delta : 0;
             this.offsetY = baseOffsetY + this.height;
+            this.direction = 'left';
             break;
         case 39: // right
-            this.x += this.isPathClear(this.x + delta + this.scaleToX*3/4, this.y) ? delta : 0;
+            this.x += this.isPathClear(this.x + delta, this.y) ? delta : 0;
             this.offsetY = baseOffsetY + this.height*3;
+            this.direction = 'right';
             break;         
         default:
             this.game.key = null;
@@ -233,9 +284,9 @@ Hero.prototype.update = function() {
     
     if(!this.game.key && this.animation) { // hero is currently animated, but no key is pressed => end animation
         this.animation = null;
-    } else if((this.game.key && !this.animation) || (this.animation && this.game.key !== this.animation.key)) { // key is pressed, but no animation is present => start animation
+    } else if((this.game.key && !this.animation) || (this.animation && this.direction !== this.animation.direction)) { // key is pressed, but no animation is present => start animation
         this.animation = new Animation(this.image, this.width, this.height, 8, 0.5, this.game.now, this.offsetX, this.offsetY);
-        this.animation.key = this.game.key;
+        this.animation.direction = this.direction;
     } /*else if() { // key is pressed, and an animation is going on => TRICKY
         // Normally, we don't have to do anything here, as the animation instance takes care of the animating
         // but, what if the user was pressing one arrow key to go one direction, and then *concurrently* pressed
@@ -257,11 +308,10 @@ Hero.prototype.getDeltaPosition = function() {
 function Ogre(game, x, y, width, height) {
     AnimatedEntity.call(this, game, x, y, width, height);
     this.image = ASSET_MANAGER.getAsset('images/monsters.png');
-    // width: 32, height: 48, frames: 3, timePerAnimation: 0.75 seconds, offsetX: 0, offsetY: 23
     this.offsetX = 0;
     this.offsetY = 23;
-    this.scaleToX = 32;
-    this.scaleToY = 38;
+    this.scaleToX = 24; // 32
+    this.scaleToY = 24; // 38
     this.VELOCITY = 20;
 }
 
@@ -277,7 +327,7 @@ Ogre.prototype.draw = function() {
 Ogre.prototype.update = function() {
     // HACK: skip over the standing sprite during the walk
     /*  var index = this.animation.getFrameIndex();
-     if(isNaN(index)) {
+     if(index) {
      this.animation.offsetX = 0;
      } else {
      this.animation.offsetX = index !== this.animation.frames - 1 ? this.animation.width: -this.animation.width;
@@ -302,8 +352,8 @@ function Skeleton(game, x, y, width, height) {
     // width: 32, height: 48, frames: 3, timePerAnimation: 0.75 seconds, offsetX: 0, offsetY: 23
     this.offsetX = 98;
     this.offsetY = 13;
-    this.scaleToX = 32;
-    this.scaleToY = 38;
+    this.scaleToX = 24;
+    this.scaleToY = 24;
     this.VELOCITY = 20;
 }
 
@@ -344,8 +394,8 @@ function Fire(game, x, y, width, height) {
     this.image = ASSET_MANAGER.getAsset('images/fire.png');
     this.animation = new Animation(this.image, width, height, 5, 1, game.now);
     // optional animation argument
-    this.scaleToX = 32;
-    this.scaleToY = 32;
+    this.scaleToX = 24; // 32
+    this.scaleToY = 24; // 32
 }
 
 Fire.prototype = new AnimatedEntity();
@@ -392,7 +442,8 @@ function Dungeon(game, enemyProbability, miscProbability) {
     this.enemyProbability = enemyProbability; // enemy probability per free space
     this.miscProbability = miscProbability;
     this.map = [[]]; // two-dimensional array (x,y coordinates)
-    this.tileSize = 48;
+    this.tileSize = 24;
+    this.offsetY = 48;
     this.tile = ASSET_MANAGER.getAsset('images/caveTiles.png');
 }
 
@@ -410,39 +461,62 @@ Dungeon.prototype.generateDungeon = function() {
     for (var i = 0; i < numTilesX; ++i) {
         this.map[i] = [];
         for (var j = 0; j < numTilesY; ++j) {
-           // F for free space, W for Wall
-           this.map[i][j] = i == 0 || i == numTilesX - 1 || j == 0 || j == numTilesY - 1 ? 'W' : 'F';
-           if(i === numTilesX - 2 && j === 0) {
-                this.map[i][j] = 'E'; // E for exit
-           }
-           
+            // generate the object to place at this location in the map
+            this.map[i][j] = this.generateObject(i, j, numTilesX, numTilesY);
         }
     }
-    
-    // as soon as we are done, let's generate the necessary entities (i.e. enemies, fire, etc.)
-    this.generateEntities();
 }
 
 // generate the entities based on the map array generated previously
-Dungeon.prototype.generateEntities = function() {
-    for (var i = 0; i < this.map.length; ++i) {
-        for (var j = 0; j < this.map.length; ++j) {
-            if (i === 0 && j === 0 || this.map[i][j] !== 'F') { continue; } // that is where we are placing our hero
-            
-            var rand = Math.random()*101, // random number from 0 to 100
-                xPos = i*this.tileSize >= this.game.frameWidth - 64 ? this.game.frameWidth : i*this.tileSize,
-                yPos = j*this.tileSize >= this.game.frameHeight - 64 ? this.game.frameHeight : j*this.tileSize;
+Dungeon.prototype.generateObject = function(i, j, numTilesX, numTilesY) {
+    
+    if (i === 0 || i === numTilesX - 1 || j === 0 || j === numTilesY - 1) { // enclosing rectangular walls for the cave
+        return 'W'; // 'W' for Wall
+    } else if (i <= 1 && j == numTilesY - 2) { // this is where we are placing our hero, so make sure it is free (no other entity there)
+        return 'F'; 
+    } else if (i === numTilesX - 2 && j === 0) { // place the exit at the top right of the screen
+        return 'O'; // 'O' for 'Out'; I wanted to save 'E' for Enemy
+    } else { // here, we can generate enemies and miscellaneous objects
+        
+        var rand = Math.ceil(Math.random()*100), // random number from 0 to 100
+            xPos = i*this.tileSize,
+            yPos = j*this.tileSize;
                 
-            // generate an entity based on the random number
-            if (rand <= this.enemyProbability) {
-                this.game.addEntity(new Fire(this.game, xPos, yPos, 64, 64));
-            } else if (rand >= 100 - this.miscProbability) {
-                this.game.addEntity(new Ogre(this.game, xPos, yPos, 32, 48));
-            } else if(rand >= 50 && rand <= 55) {
-                this.game.addEntity(new Skeleton(this.game, xPos, yPos, 31, 48));
+        // generate an entity based on the random number
+        if (rand <= this.miscProbability) {
+            this.game.addEntity(new Fire(this.game, xPos, yPos, 64, 64));
+            return 'M'; // 'M' for Misc.
+        } else if (rand >= 100 - this.enemyProbability) {
+            var enemy = null;
+            
+            // further subdivide the enemy based on the random number
+            switch(this.getEnemyChoice(2)) {
+                case 1:
+                    enemy = new Ogre(this.game, xPos, yPos, 32, 48);
+                    break;
+                case 2:
+                    enemy = new Skeleton(this.game, xPos, yPos, 31, 48);
+                    break;
             }
-         }
-     }
+
+            this.game.addEntity(enemy); // add the enemy to the game
+            return 'E'; // 'E' for Enemy
+        } else {
+            return 'F'; // just free space
+        }
+    }
+}
+
+// return the winner number out of the number of choices (from 1 to numChoices)
+Dungeon.prototype.getEnemyChoice = function(numChoices) {
+    var rand = Math.ceil(Math.random() * 100), 
+        div = 100/numChoices;
+        
+    for (var i = 0; i < numChoices; ++i) {
+        if (i*div <= rand && rand <= (i+1)*div) {
+            return (i+1);
+        }
+    }
 }
 
 Dungeon.prototype.drawExit = function(x, y) {
@@ -450,11 +524,11 @@ Dungeon.prototype.drawExit = function(x, y) {
 }
 
 Dungeon.prototype.drawTile = function(x, y) {
-     this.game.ctx.drawImage(this.tile, 0, this.tileSize, this.tileSize, this.tileSize, x, y, this.tileSize, this.tileSize);
+     this.game.ctx.drawImage(this.tile, 0, this.offsetY, this.tileSize, this.tileSize, x, y, this.tileSize, this.tileSize);
 }
 
 Dungeon.prototype.drawWall = function(x, y) {
-    this.game.ctx.drawImage(this.tile, 0, 0, this.tileSize, this.tileSize, x, y, this.tileSize, this.tileSize);
+    this.game.ctx.drawImage(this.tile, 0, 0, this.offsetY, this.tileSize, x, y, this.tileSize, this.tileSize);
 }
 
 // draw walls and free space for the dungeon; the entities will be drawn in their own respective draw functions
@@ -462,7 +536,9 @@ Dungeon.prototype.drawDungeon = function() {
     for (var i = 0; i < this.map.length; ++i) {
         for (var j = 0; j < this.map.length; ++j) {
             switch (this.map[i][j]) {
-                case 'F': // free space
+                case 'F': // free space.
+                case 'E': // enemies and 
+                case 'M': // miscellaneous objects also get drawn a tile
                     this.drawTile(i*this.tileSize, j*this.tileSize);
                     break;
                 case 'W': // need to draw a wall
@@ -472,6 +548,36 @@ Dungeon.prototype.drawDungeon = function() {
                     this.drawExit(i*this.tileSize, j*this.tileSize);
             }
         }
+    }
+}
+
+// updates this.map in case entities have moved
+Dungeon.prototype.updateMap = function(entity, oldPosition) {
+    
+    // get the corresponding slots in this.map
+    var i = Math.floor(oldPosition.x/this.tileSize),
+        j = Math.floor(oldPosition.y/this.tileSize);
+    
+    // since the entity moved, it is no longer in the old position so declare it free
+    this.map[i][j] = 'F';
+    
+    i = Math.floor(entity.x/this.tileSize);
+    j = Math.floor(entity.y/this.tileSize);
+   
+    // what do we replace with in the new position?
+    switch(entity.constructor.name) {
+        case 'Hero':
+            this.map[i][j] = 'F'; // 'H' for hero
+            break;
+            
+        case 'Ogre':
+        case 'Skeleton':
+            this.map[i][j] = 'E'; // 'E' for enemy
+            break;
+            
+        case 'Fire':
+            this.map[i][j] = 'M'; // 'M' for miscellaneous
+            break;
     }
 }
 
@@ -515,12 +621,28 @@ GameEngine.prototype.draw = function() {
 GameEngine.prototype.update = function() {
     // this will become a reality later on
     this.entities.forEach(function(entity, index) {
+        // keep track of the entity's position so that we can update the dungeon map
+       var oldPosition = {
+                x: null,
+                y: null
+            };
+            
         if (entity.alive) {
-            entity.update();
+            // store previous position
+            oldPosition.x = entity.x;
+            oldPosition.y = entity.y;
+            
+            entity.update(); // update the entity
+
         } else {
-            entities.splice(index, 1);
-            // remove the entity from the entities array
+            entities.splice(index, 1); // remove the entity from the entities array
         }
+        
+        // update the dungeon map to store the entity's new position in the map array
+        // this.dungeon.updateMap(entity, oldPosition);
+        /*
+         * Note: updating the map really seems to be more trouble than its worth with the given sprites...
+         */
     }, this);
 }
 
@@ -528,7 +650,7 @@ GameEngine.prototype.init = function() {
     this.dungeon = new Dungeon(this, 2, 1); // new dungeon with enemy probability of 10% per free space
     this.dungeon.generateDungeon();
     // (x, y) = (0, 0), width = 64, height = 64
-    this.addEntity(new Hero(this, 60, this.frameHeight - 90, 64, 64));
+    this.addEntity(new Hero(this, 60, this.frameHeight - 95, 64, 64));
 
     // let's start tracking input
     this.trackEvents();
@@ -549,7 +671,6 @@ GameEngine.prototype.start = function() {
             }, that);
         }
         that.now = time;
-        //console.log(that.entities);
         that.loop();
         requestAnimationFrame(gameLoop, that.ctx); // ctx as 2nd argument so that we don't reanimate while ctx is out of view
     })();
