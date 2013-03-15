@@ -125,6 +125,7 @@ function AnimatedEntity(game, x, y, width, height) {
     this.animation = null;
     this.width = width;
     this.height = height;
+    // default values for the scaling
     this.scaleToX = 32;
     this.scaleToY = 32;
     
@@ -146,6 +147,40 @@ AnimatedEntity.prototype.draw = function(offsetX, offsetY) {
 }
 
 AnimatedEntity.prototype.update = function() {
+}
+
+// check the proposed x and y bounds and see whether we can move there
+AnimatedEntity.prototype.isPathClear = function(newX, newY) {
+    // let's check the map array to see if it is free or not
+    // switch statement in case I want to add more cases in the future
+    debug({
+        x: newX,
+        y: newY,
+        obj: this.getObjectAtPoint(newX, newY)
+    });
+    if (this.getObjectAtPoint(newX, newY) === 'F') {
+        return true;
+    } else {
+        return false;
+    }
+     /*   case 'F': // free
+            return true;
+        default: 
+            return false;
+    }*/
+    
+}
+
+AnimatedEntity.prototype.getObjectAtPoint = function(x, y) {
+    // gets the corresponding tile number (i and j) for use in retrieval in map
+    var i = Math.floor(x/this.game.dungeon.tileSize), 
+        j = Math.floor(y/this.game.dungeon.tileSize); 
+   /* debug({
+        game: this.game,
+        dungeon: this.game.dungeon,
+        map: this.game.dungeon.map
+    });*/
+    return this.game.dungeon.map[i][j];
 }
 
 // Class for our game's hero!
@@ -170,24 +205,25 @@ Hero.prototype.draw = function() {
 
 Hero.prototype.update = function() {
     // && (!this.game.previousKey || this.game.previousKey === this.game.key) 
-    var delta = this.game.now && !isNaN(this.game.now) ? this.getDeltaPosition() : 0,
+    var delta = this.game.now ? this.getDeltaPosition() : 0,
         baseOffsetY = 518;
-
+        
     switch(this.game.key) {
         case 38: // up
-            this.y -= delta;
+            this.y -= this.isPathClear(this.x, this.y - delta) ? delta : 0;
+            console.log(this.isPathClear(this.x, this.y - delta));
             this.offsetY = baseOffsetY;
             break;
         case 40: // down
-            this.y += delta;
+            this.y += this.isPathClear(this.x, this.y + delta + this.scaleToY) ? delta : 0;
             this.offsetY = baseOffsetY + this.height * 2;
             break;
         case 37: // left
-            this.x -= delta;
+            this.x -= this.isPathClear(this.x - delta, this.y) ? delta : 0;
             this.offsetY = baseOffsetY + this.height;
             break;
         case 39: // right
-            this.x += delta;
+            this.x += this.isPathClear(this.x + delta + this.scaleToX*3/4, this.y) ? delta : 0;
             this.offsetY = baseOffsetY + this.height*3;
             break;         
         default:
@@ -218,7 +254,6 @@ Hero.prototype.getDeltaPosition = function() {
     return elapsedTime > 30 ? 0 : Math.round(elapsedTime / 1000 * this.VELOCITY); // to avoid wormholes
 }
 
-// I think this way is not the way to go...
 function Ogre(game, x, y, width, height) {
     AnimatedEntity.call(this, game, x, y, width, height);
     this.image = ASSET_MANAGER.getAsset('images/monsters.png');
@@ -230,7 +265,7 @@ function Ogre(game, x, y, width, height) {
     this.VELOCITY = 20;
 }
 
-// set Entity as parent class
+// set AnimatedEntity as parent class
 Ogre.prototype = new AnimatedEntity();
 Ogre.prototype.constructor = Ogre;
 
@@ -258,6 +293,48 @@ Ogre.prototype.update = function() {
 }
 
 Ogre.prototype.canAttackHero = function() {
+    return true;
+}
+
+function Skeleton(game, x, y, width, height) {
+    AnimatedEntity.call(this, game, x, y, width, height);
+    this.image = ASSET_MANAGER.getAsset('images/monsters.png');
+    // width: 32, height: 48, frames: 3, timePerAnimation: 0.75 seconds, offsetX: 0, offsetY: 23
+    this.offsetX = 98;
+    this.offsetY = 13;
+    this.scaleToX = 32;
+    this.scaleToY = 38;
+    this.VELOCITY = 20;
+}
+
+// set AnimatedEntity as parent class
+Skeleton.prototype = new AnimatedEntity();
+Skeleton.prototype.constructor = Skeleton;
+
+// override instance method of the parent class
+Skeleton.prototype.draw = function() {
+    AnimatedEntity.prototype.draw.call(this, this.offsetX, this.offsetY);
+}
+
+Skeleton.prototype.update = function() {
+    // HACK: skip over the standing sprite during the walk
+    /*  var index = this.animation.getFrameIndex();
+     if(isNaN(index)) {
+     this.animation.offsetX = 0;
+     } else {
+     this.animation.offsetX = index !== this.animation.frames - 1 ? this.animation.width: -this.animation.width;
+     }*/
+    if(!this.animation && this.canAttackHero() && this.game.now) {
+        this.animation = new Animation(this.image, this.width, 
+                                       this.height, 3, 0.75, this.game.now, this.offsetX, this.offsetY);
+    } else {
+       // console.log(this);
+    }
+
+    AnimatedEntity.prototype.update.call(this);
+}
+
+Skeleton.prototype.canAttackHero = function() {
     return true;
 }
 
@@ -319,6 +396,12 @@ function Dungeon(game, enemyProbability, miscProbability) {
     this.tile = ASSET_MANAGER.getAsset('images/caveTiles.png');
 }
 
+/*
+ * TODO: An idea here would be to even add the entities in the dungeon's map,
+ * and then constantly update their positions so that we can use only the map in
+ * collision detection.
+ */
+
 // use a two dimensional array to keep track of the initial objects and entities in the dungeon
 Dungeon.prototype.generateDungeon = function() {
     var numTilesX = Math.ceil(this.game.frameWidth/this.tileSize),
@@ -350,10 +433,13 @@ Dungeon.prototype.generateEntities = function() {
                 xPos = i*this.tileSize >= this.game.frameWidth - 64 ? this.game.frameWidth : i*this.tileSize,
                 yPos = j*this.tileSize >= this.game.frameHeight - 64 ? this.game.frameHeight : j*this.tileSize;
                 
+            // generate an entity based on the random number
             if (rand <= this.enemyProbability) {
                 this.game.addEntity(new Fire(this.game, xPos, yPos, 64, 64));
             } else if (rand >= 100 - this.miscProbability) {
                 this.game.addEntity(new Ogre(this.game, xPos, yPos, 32, 48));
+            } else if(rand >= 50 && rand <= 55) {
+                this.game.addEntity(new Skeleton(this.game, xPos, yPos, 31, 48));
             }
          }
      }
