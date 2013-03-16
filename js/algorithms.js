@@ -109,7 +109,7 @@ PathFinder.prototype.areNodesEqual = function(nodeOne, nodeTwo) {
 
 // returns whether the node in question is the goal node
 PathFinder.prototype.isGoalNode = function(nodeObject) {
-    if(!nodeObject) {
+    if(!nodeObject.node) {
         return false;
     }
     return nodeObject.node.x === this.goalNode.x && nodeObject.node.y === this.goalNode.y;
@@ -126,11 +126,13 @@ PathFinder.prototype.getNeighboringNodes = function(node) {
             newY = node.y + direction[1];
             
         // check to see whether the path is clear
-       if(this.enemy.isPathClear(newX*this.game.dungeon.tileSize, newY*this.game.dungeon.tileSize, false)) {
+       if(this.enemy.isPathClear(newX*this.game.dungeon.tileSize, newY*this.game.dungeon.tileSize, false, true, false)) {
             var newNode = new Node(newX, newY, node, node.g + this.MOVEMENT_COST);
             newNode.setHAndUpdateF(this.getH(newNode));
             // add it to the neighbors array
             neighbors.push(newNode);
+       } else {
+           console.log('newX: ' + newX + ' newY: ' + newY);
        }
     }, this);
     
@@ -157,7 +159,7 @@ PathFinder.prototype.getPath = function(node) {
         if(!this.areNodesEqual(this.startNode, node)) { 
             this.path.unshift(node);
         } 
-        console.log(node);
+        //console.log(node);
     }
 }
 
@@ -171,7 +173,8 @@ PathFinder.prototype.findPath = function() {
 
     var startNode = new Node(tile.i, tile.j, null, 0),
         bestNode = {},
-        numNodesConsidered = 0;
+        numNodesConsidered = 0,
+        success = true;
         
     this.startNode = startNode;
     // make sure we have the correct h, g, and f values
@@ -183,6 +186,8 @@ PathFinder.prototype.findPath = function() {
     while (!this.isGoalNode( (bestNode = this.getBestNode()))) {
         //console.log(this.open);
         if(typeof bestNode.node === 'undefined') {
+            // there was an error...
+            success = false;
             break;
         }
         
@@ -228,7 +233,12 @@ PathFinder.prototype.findPath = function() {
         }
     } // end while
     
-    // get the path and return it
-    this.getPath(bestNode.node);
-    return this.path;
+    if(success) {
+        // get the path and return it
+        this.getPath(bestNode.node);
+        return this.path;
+    }
+
+    // return false to signify that there was an error
+    return false;
 }

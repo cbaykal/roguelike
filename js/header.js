@@ -157,14 +157,20 @@ AnimatedEntity.prototype.getDeltaPosition = function() {
 }
 
 // check the proposed x and y bounds and see whether we can move there
-AnimatedEntity.prototype.isPathClear = function(newX, newY, compareEntities) {
+AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, compareEntities, considerHero) {
     
-    var compareEntities = typeof compareEntities === 'undefined' ? true : compareEntities;
+    var compareEntities = typeof compareEntities === 'undefined' ? true : compareEntities,
+        considerHero = typeof considerHero === 'undefined' ? true : considerHero;
+        
     // let's check the map array to see whether the new location is free or not
-    var adjustedCoords = this.getAdjustedCoords(newX, newY);
+    var adjustedCoords = typeof useAdjustedCoords === "undefined" || useAdjustedCoords ? this.getAdjustedCoords(newX, newY) : {x:newX, y:newY};
     // gets the corresponding tile number (i and j) for use in retrieval in map
-    var i = Math.floor(adjustedCoords.x/this.game.dungeon.tileSize), 
-        j = Math.floor(adjustedCoords.y/this.game.dungeon.tileSize); 
+    
+    var tileX = Math.floor(adjustedCoords.x/this.game.dungeon.tileSize),
+        tileY = Math.floor(adjustedCoords.y/this.game.dungeon.tileSize);
+        
+    var i =  tileX < 0 ? 1 : tileX, 
+        j = tileY < 0 ? 1 : tileY; 
 
     if(this.game.dungeon.map[i][j] === 'W') {
         return false; // there's a wall, so obviously can't move there
@@ -181,7 +187,8 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, compareEntities) {
     for (var i = 0; i < this.game.entities.length; ++i) {
         var entity = this.game.entities[i];
         // obviously don't check to see whether the entity is colliding with itself 
-        if (this === entity) { 
+        // also, for path planning, I need to make sure it doesn't see the hero as an obstacle
+        if (this === entity || (!considerHero && entity.constructor.name === 'Hero')) { 
             continue; 
         }
         
@@ -189,17 +196,7 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, compareEntities) {
         // Note: we define the retangle's top left corner as y + height/2 or y + height*1/5 because we want to represent the blocking point
         // as the feet of the skeleton to make the collisions look more natural
         entityRect = new Rectangle(entity.x, entity.x + entity.scaleToX, entity.y + entity.scaleToY*(1/5), entity.y + entity.scaleToY);
-        switch(this.direction) {
-            case 'up':
-            case 'left':
-            case 'down':
-            case 'right':
-                heroRect = new Rectangle(newX, newX + this.scaleToX*3/4, newY + this.scaleToY/2, newY + this.scaleToY);
-                break;
-            case 'right':
-                //heroRect = new Rectangle(newX, newX + this.scaleToX/2, newY, newY + this.scaleToY/2);
-                break;
-        }
+        heroRect = new Rectangle(newX, newX + this.scaleToX*3/4, newY + this.scaleToY/2, newY + this.scaleToY);
         
         if (heroRect.isIntersecting(entityRect)) {
             return false;
@@ -207,6 +204,50 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, compareEntities) {
     }
     
     return true;
+}
+
+AnimatedEntity.prototype.attackEnemy = function() {
+    var rectX1 = this.x, // top left edge
+        rectX2 = this.x + this.scaleToX, // top right edge
+        rectY1 = this.y, // bottom left edge
+        rectY2 = this.y + this.scaleToY; // bottom right edge
+        
+    // adjust the rectangle used for checking intersection with the enemy so that
+    // it is more lenient depending on its ATTACKING_RANGE
+    switch(this.attackingDirection) {
+        case 'up':
+            rectY1 -= this.ATTACKING_RANGE;
+            break;
+        case 'down':
+            rectY2 += this.ATTACKING_RANGE;
+            break;
+        case 'right':
+            rectX2 += this.ATTACKING_RANGE;
+            break;
+        case 'left':
+            rectX1 -= this.ATTACKING_RANGE;
+            break;
+    }
+    
+    var heroRect = new Rectangle(rectX1, rectX2, rectY1, rectY2),
+        entityRect = null;
+    
+    // let's check for collision and damage the opponent(s) if it/they is within range
+    for (var i = 0; i < this.game.entities.length; ++i) {
+        var entity = this.game.entities[i];
+        
+        // obviously we don't want to attack ourself, also attacking a misc. object doesn't make much sense
+        if(entity === this || entity.constructor.name === 'Fire') {
+            continue;
+        }
+        entityRect = new Rectangle(entity.x, entity.x + entity.scaleToX, entity.y, entity.y + entity.scaleToY);
+ 
+        if (heroRect.isIntersecting(entityRect)) {
+            // the enemy is within range, decrement their health based on the attacker's strength
+            entity.health -= this.strength; 
+            console.log(entity.health);
+        }
+    }
 }
 
 // in most cases, we have to adjust the coordinates accordingly 
@@ -224,13 +265,19 @@ AnimatedEntity.prototype.getAdjustedCoords = function(newX, newY) {
             x = newX + this.scaleToX/2;
             y = newY + this.scaleToY;
             break;
-        case 'right': // take the rightmost point of the feet
-            x = newX + this.scaleToX;
+        case 'right':
+            x = newX + this.scaleToX/2;
             y = newY + this.scaleToY;
             break;
-        case 'left': // leftmost point of the feet
-            x = newX;
+        case 'left':
+            x = newX + this.scaleToX/2;
             y = newY + this.scaleToY;
+            break;
+            
+        case 'punch':
+            x = newX;
+            y = newY;
+            break;
     }
     
     return {
@@ -278,7 +325,7 @@ Hero.prototype.draw = function() {
     // draw the health bar and its frame; the width of the red health bar depends on the current health
     ctx.drawImage(ASSET_MANAGER.getAsset('images/health_frame.png'), 0, 0);
     ctx.drawImage(ASSET_MANAGER.getAsset('images/health.png'), 0, 0, 
-                                          Math.floor(picWidth*this.health/100), picHeight, 0, 0, picWidth, picHeight);
+                                          Math.floor(picWidth*this.health/100), picHeight, 0, 0, Math.floor(picWidth*this.health/100), picHeight);
     
     this.game.ctx.drawImage(offCanvas, 48, this.game.frameHeight - 40);
     
@@ -298,22 +345,22 @@ Hero.prototype.update = function() {
         
     switch(this.game.key) {
         case 38: // up
-            this.y -= this.isPathClear(this.x, this.y - delta) ? delta : 0;
+            this.y -= this.isPathClear(this.x, this.y - delta, true) ? delta : 0;
             this.offsetY = baseOffsetY;
             this.direction = 'up';
             break;
         case 40: // down
-            this.y += this.isPathClear(this.x, this.y + delta) ? delta : 0;
+            this.y += this.isPathClear(this.x, this.y + delta, true) ? delta : 0;
             this.offsetY = baseOffsetY + this.height * 2;
             this.direction = 'down';
             break;
         case 37: // left
-            this.x -= this.isPathClear(this.x - delta, this.y) ? delta : 0;
+            this.x -= this.isPathClear(this.x - delta, this.y, true) ? delta : 0;
             this.offsetY = baseOffsetY + this.height;
             this.direction = 'left';
             break;
         case 39: // right
-            this.x += this.isPathClear(this.x + delta, this.y) ? delta : 0;
+            this.x += this.isPathClear(this.x + delta, this.y, true) ? delta : 0;
             this.offsetY = baseOffsetY + this.height*3;
             this.direction = 'right';
             break;         
@@ -322,7 +369,7 @@ Hero.prototype.update = function() {
             // realign the offset of the sprite
             this.offsetY = punchOffset + this.offsetY > baseOffsetY + punchOffset + this.height*3 ? this.offsetY : punchOffset + this.offsetY;
             this.attackingDirection = this.direction === 'punch' ? this.attackingDirection : this.direction;
-            this.direction = "punch";
+            this.direction = 'punch';
             break;
         default:
             this.game.key = null;
@@ -360,48 +407,6 @@ Hero.prototype.update = function() {
     this.lastUpdateTime = this.game.now;
 }
 
-Hero.prototype.attackEnemy = function() {
-    var rectX1 = this.x, // top left edge
-        rectX2 = this.x + this.scaleToX, // top right edge
-        rectY1 = this.y, // bottom left edge
-        rectY2 = this.y + this.scaleToY; // bottom right edge
-        
-    // adjust the rectangle used for checking intersection with the enemy so that
-    // it is more lenient depending on its ATTACKING_RANGE
-    switch(this.attackingDirection) {
-        case 'up':
-            rectY1 -= this.ATTACKING_RANGE;
-            break;
-        case 'down':
-            rectY2 += this.ATTACKING_RANGE;
-            break;
-        case 'right':
-            rectX2 += this.ATTACKING_RANGE;
-            break;
-        case 'left':
-            rectX1 -= this.ATTACKING_RANGE;
-            break;
-    }
-    
-    var heroRect = new Rectangle(rectX1, rectX2, rectY1, rectY2),
-        entityRect = null;
-    
-    // let's check for collision and damage the opponent(s) if it/they is within range
-    for (var i = 0; i < this.game.entities.length; ++i) {
-        var entity = this.game.entities[i];
-        
-        // obviously we don't want to attack ourself, also attacking a misc. object doesn't make much sense
-        if(entity === this || entity.constructor.name === 'Fire') {
-            continue;
-        }
-        entityRect = new Rectangle(entity.x, entity.x + entity.scaleToX, entity.y, entity.y + entity.scaleToY);
- 
-        if (heroRect.isIntersecting(entityRect)) {
-            // the enemy is within range, decrement their health based on the attacker's strength
-            entity.health -= this.strength; 
-        }
-    }
-}
 
 function Enemy(game, x, y, width, height) {
     AnimatedEntity.call(this, game, x, y, width, height);
@@ -412,17 +417,14 @@ function Enemy(game, x, y, width, height) {
     this.scaleToX = 0;
     this.scaleToY = 0;
     this.baseOffsetY = 0; // for sprite positioning
-    this.direction = "";
-    this.aStar = {}; // will determine the path to follow to reach hero
-    this.initHeroPosition = {}; // keep track of the initial hero position in case we need to adjust path
-    
+    this.direction = "left";
     this.path = []; // will hold the path determined by the path planner
     this.pathLastUpdated = null;
-    this.health = 50;
-    this.strength = 1e-3;
+    this.health = 75;
+    this.strength = 1e-1;
     this.wandering = false;
     this.wanderingDelta = 0; // keep track of how much it has wandered
-    this.VELOCITY = 40;
+    this.VELOCITY = 400;
     this.DISTANCE_THRESHOLD = 0; // if the hero is within this distance, attack him
     this.WANDER_PROBABILITY = 5e-3; // 5e-3
     this.ATTACKING_RANGE = 10;
@@ -451,8 +453,7 @@ Enemy.prototype.update = function() {
 
     if (this.canAttackHero() || this.wandering) {
         this.direction = this.wandering ? this.direction : this.getDirection();
-        //this.direction = 'left'; // for debugging
-
+ 
         switch (this.direction) {
             case 'up':
                 if ((this.wandering && this.isPathClear(this.x, this.y - delta)) || this.canAttackHero()) {
@@ -489,22 +490,25 @@ Enemy.prototype.update = function() {
                 }
                 this.offsetY = this.baseOffsetY + skipY;
                 break;
+                
+             case 'punch':
+                this.attackEnemy();
+                this.attackingDirection = this.direction === 'punch' ? this.attackingDirection : this.direction;
+                break;
         }
         
         if (this.game.now) {
             this.animation = this.animation && this.direction === this.animation.direction ? this.animation :
                         new Animation(this.image, this.width, this.height, 3, 1.0, this.game.now, this.offsetX, this.offsetY);
             this.animation.direction = this.direction;
-            
         }
         
         if (this.wandering) {
             this.wanderingDelta += delta;
-            this.attackingDirection = null;
         }
+        
     } else {
         this.animation = null;
-        this.aStar = null;
     }
     
     this.lastUpdateTime = this.game.now;
@@ -524,9 +528,12 @@ Enemy.prototype.getDirection = function() {
     // determining the timer delta by a function that takes into account distance
     var timerDelta = this.TIMER_DELTA_CONSTANT*this.distanceToHero();
     
-    if (!this.pathLastUpdated || (this.game.now - this.pathLastUpdated) >= timerDelta) {
-        var planner = new PathFinder(this.game, this.game.hero, this);
-        this.path = planner.findPath(); // update the path
+    if (!this.path || !this.pathLastUpdated || (this.game.now - this.pathLastUpdated) >= timerDelta) {
+        var planner = new PathFinder(this.game, this.game.hero, this),
+            foundPath = planner.findPath();
+         // update the path if there were no errors in finding it
+        this.path = (foundPath || !this.path) ? foundPath : this.path;
+        
         this.pathLastUpdated = this.game.now; // record the last updated time
     }
 
@@ -534,15 +541,16 @@ Enemy.prototype.getDirection = function() {
     if (!this.goalX && !this.goalY || this.isAtGoalPosition()) {
         var tile = this.path.pop();
         // pop the tile that we need to go to
-        if (typeof tile === 'undefined') {
-            this.attackingDirection = this.direction;
-            return;
+        if (typeof tile === 'undefined' || this.path.length === 0) { // out of path tiles, start attacking
+            this.attackingDirection = this.direction === 'punch' ? this.attackingDirection : this.direction;
+            return 'punch';
         }
-
+        
         this.goalX = tile.x * this.game.dungeon.tileSize;
         this.goalY = tile.y * this.game.dungeon.tileSize;
     }
-
+    
+    var distThreshold = 5;
     // decide on the direction based on the current position relative to the goal position
     if (this.goalX !== this.x) {
         if (this.goalX < this.x) {// goal lies to the left
@@ -562,11 +570,17 @@ Enemy.prototype.getDirection = function() {
 
 // are we at the goal position determined by the path planner?
 Enemy.prototype.isAtGoalPosition = function() {
-   // if((this.x <= this.goalX && this.x + this.scaleToX >= this.goalX) && 
-      // (this.y <= this.goalY && this.y + this.scaleToY >= this.goalY)) {
-       if(this.x === this.goalX && this.y === this.goalY) {
+    var enemyRect = new Rectangle(this.x, this.x + this.scaleToX, this.y, this.y + this.scaleToY),
+        heroRect = new Rectangle(this.game.hero.x, this.game.hero.x + this.game.hero.scaleToX, 
+                                this.game.hero.y, this.game.hero.y + this.game.hero.scaleToY);
+                                
+    if (enemyRect.isIntersecting(heroRect)) {
+        return true;
+    } else if ((this.x <= this.goalX && this.x + this.scaleToX >= this.goalX) && 
+       (this.y <= this.goalY && this.y + this.scaleToY >= this.goalY)) {
+       //if(this.x === this.goalX && this.y === this.goalY) {
            return true;
-       }
+    }
     return false;
 }
 
@@ -600,10 +614,7 @@ Enemy.prototype.wanderAround = function() {
 }
 
 Enemy.prototype.canAttackHero = function() {
-    /*var distance = Math.sqrt(Math.pow(this.x - this.game.hero.x, 2) + Math.pow(this.y - this.game.hero.y, 2));
-     return distance <= this.DISTANCE_THRESHOLD;*/
-    
-    return true;
+     return this.distanceToHero() <= this.DISTANCE_THRESHOLD;
 }
 
 Enemy.prototype.explode = function() {
@@ -618,7 +629,7 @@ function Ogre(game, x, y, width, height) {
     this.baseOffsetY = 13;
     this.scaleToX = 24; // 32
     this.scaleToY = 24; // 38
-    this.VELOCITY = 40;
+    this.VELOCITY = 100;
     this.DISTANCE_THRESHOLD = 100; // if the hero is within this distance, attack him
 }
 
@@ -640,7 +651,7 @@ function Skeleton(game, x, y, width, height) {
     this.baseOffsetY = 13;
     this.scaleToX = 24;
     this.scaleToY = 24;
-    this.VELOCITY = 40;
+    this.VELOCITY = 40
     this.DISTANCE_THRESHOLD = 100;
 }
 
@@ -705,7 +716,7 @@ Animation.prototype.reanimate = function(ctx) {
 function Explosion(game, x, y, width, height) {
     AnimatedEntity.call(this, game, x, y, width, height);
     this.image = ASSET_MANAGER.getAsset('images/explosion.png');
-    this.animation = new Animation(this.image, this.width, this.height, 5, 0.25, game.now, 0, 0, false);
+    this.animation = new Animation(this.image, this.width, this.height, 5, 0.5, game.now, 0, 0, false);
     this.scaleToX = 32;
     this.scaleToY = 32;
 }
@@ -899,7 +910,7 @@ function GameEngine(ctx) {
     this.previousKey = null; // keep track of previously pressed key to avoid "sticky" keys
     this.dungeon = null;
     this.hero = null; // keep track of the hero for path planning purposes
-    this.ENEMY_PROBABILITY = 0; // 3e-2
+    this.ENEMY_PROBABILITY = 3e-2; // 3e-2
     this.MISC_PROBABILITY = 5e-3; // 5e-3
 }
 
@@ -966,6 +977,7 @@ GameEngine.prototype.update = function() {
 }
 
 GameEngine.prototype.init = function() {
+    
     // enemy probability : 0.1%;
     // miscellanous probability: 0.01%
     this.dungeon = new Dungeon(this, this.ENEMY_PROBABILITY, this.MISC_PROBABILITY);
@@ -977,12 +989,6 @@ GameEngine.prototype.init = function() {
 
     // let's start tracking input
     this.trackEvents();
-    var skeleton = new Skeleton(this, 1100, 200, 32, 48);
-    skeleton.direction = 'up';
-    this.addEntity(skeleton);
-    //var planner = new PathFinder(this, hero, skeleton);
-   // skeleton.path = planner.findPath();
-   
 }
 
 GameEngine.prototype.start = function() {
