@@ -413,7 +413,7 @@ function Enemy(game, x, y, width, height) {
     this.aStar = {}; // will determine the path to follow to reach hero
     this.initHeroPosition = {}; // keep track of the initial hero position in case we need to adjust path
     
-    this.health = 10;
+    this.health = 50;
     this.strength = 1e-3;
     this.wandering = false;
     this.wanderingDelta = 0; // keep track of how much it has wandered
@@ -427,7 +427,8 @@ Enemy.prototype.constructor = Enemy;
 
 Enemy.prototype.update = function() {
     if(this.health <= 0) {
-        this.alive = false;
+        this.alive = false; // no longer alive, so the master update thread should take care of removing it
+        this.explode(); // replace this entity with an explosion animation
         return;
     }
     
@@ -503,8 +504,7 @@ Enemy.prototype.update = function() {
 
 // get the direction to move based on A* path planning
 Enemy.prototype.getDirection = function() {
-    //return this.direction;
-    return 'left';
+    return this.direction;
 }
 
 // have the enemy move around to make it look more alive
@@ -538,6 +538,10 @@ Enemy.prototype.wanderAround = function() {
 Enemy.prototype.canAttackHero = function() {
     var distance = Math.sqrt(Math.pow(this.x - this.game.hero.x, 2) + Math.pow(this.y - this.game.hero.y, 2));
     return distance <= this.DISTANCE_THRESHOLD;
+}
+
+Enemy.prototype.explode = function() {
+    this.game.addEntity(new Explosion(this.game, this.x, this.y, 33.8, 32));
 }
 
 function Ogre(game, x, y, width, height) {
@@ -632,6 +636,23 @@ Animation.prototype.reanimate = function(ctx) {
     this.startTime = window.performance.now();
 }
 
+function Explosion(game, x, y, width, height) {
+    AnimatedEntity.call(this, game, x, y, width, height);
+    this.image = ASSET_MANAGER.getAsset('images/explosion.png');
+    this.animation = new Animation(this.image, this.width, this.height, 5, 0.01, game.now, 0, 0, false);
+    this.scaleToX = 24;
+    this.scaleToY = 24;
+}
+
+Explosion.prototype = new AnimatedEntity();
+Explosion.prototype.constructor = Explosion;
+
+Explosion.prototype.update = function() {
+    if(this.animation.isDone()) {
+        this.alive = false;
+    }
+}
+
 function Dungeon(game, enemyProbability, miscProbability) {
     this.game = game;
    // this.percentWalls = percentWalls;
@@ -676,9 +697,10 @@ Dungeon.prototype.isWall = function(i, j, numTilesX, numTilesY) {
         (i === 35 && j >= 2 && j <= 9) ||
         (i === 40 && j > 0 && j <= 12) ||
         (i >= 23 && i <= 40 && j === 12) ||
-        (i === 23 && j >= 12 && j <= 22) ||
-        (i >= 23 && i <= 44 && j === 22) ||
-        (i === 44 && j > 10 && j <= 22)) { 
+        (i === 23 && j >= 12 && j <= 16) ||
+        (i >= 23 && i <= 44 && j === 16) ||
+        (i === 44 && j > 10 && j <= 16)) 
+    { 
             
         return true;
     } 
@@ -811,8 +833,8 @@ function GameEngine(ctx) {
     this.previousKey = null; // keep track of previously pressed key to avoid "sticky" keys
     this.dungeon = null;
     this.hero = null; // keep track of the hero for path planning purposes
-    this.ENEMY_PROBABILITY = 1e-2; // 1e-2
-    this.MISC_PROBABILITY = 5e-3;
+    this.ENEMY_PROBABILITY = 5e-2; // 5e-2
+    this.MISC_PROBABILITY = 5e-3; // 5e-3
 }
 
 GameEngine.prototype.addEntity = function(entity) {
@@ -870,7 +892,10 @@ GameEngine.prototype.update = function() {
     // contains the initial length of items
     
     for(var i = this.entities.length - 1; i >= 0; --i) {
-        
+        if(!this.entities[i].alive) {
+            // if the entity is no longer alive remove it from the entities array
+            this.entities.splice(i, 1);
+        }
     }
 }
 
@@ -952,17 +977,25 @@ window.addEventListener('load', function() {
     
     game = new GameEngine(canvas.getContext('2d'));
     var lCanv = game.getLoadingScreen();
+    
     // display the loading screen while we load assets
     game.ctx.drawImage(lCanv, (game.frameWidth - lCanv.width) / 2, (game.frameHeight - lCanv.height) / 2);
+    
+    // update appCache if appropriate
     ASSET_MANAGER.updateAppCache();
+    
+    // Download images
     ASSET_MANAGER.queueDownload('images/fire.png');
     ASSET_MANAGER.queueDownload('images/monsters.png');
     ASSET_MANAGER.queueDownload('images/hero.png');
     ASSET_MANAGER.queueDownload('images/caveTiles.png');
     ASSET_MANAGER.queueDownload('images/health.png');
     ASSET_MANAGER.queueDownload('images/health_frame.png');
+    ASSET_MANAGER.queueDownload('images/explosion.png');
+    
+    // Download sounds
     ASSET_MANAGER.queueSound('song.mp3');
-    // TODO: Also preload all of the sounds that we will use in the game
+    
     ASSET_MANAGER.downloadAll(function() {
         console.log('All assets have been loaded succesfully.');
         // these two should be the only two statements here

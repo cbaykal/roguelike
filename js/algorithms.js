@@ -35,4 +35,7 @@ Rectangle.prototype.isIntersecting = function(rect) {
  * size of the game. Can improve later on if performance is an issue
  * 
  */
+function aStar() {
+    
+}
 
