@@ -31,10 +31,8 @@ Rectangle.prototype.isIntersecting = function(rect) {
 /*
  * A* Code (path planning) by Cenk Baykal
  * Figured it would be good review of data structures and algorithms
- * I'm going to implement a variation of A*. Since the number of grids in
- * the game is not high (namely it is frameWidth/tileSize*frameHeight/tileSize) I am
- * going to utilize counting sort (obviously with an array) instead of a priority queue to 
- * sort the nodes and index the minimum
+ * I'm going to implement my own simplified variation of A* given the 
+ * size of the game. Can improve later on if performance is an issue
  * 
  */
 

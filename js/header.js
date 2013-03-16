@@ -161,19 +161,16 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY) {
     
     // let's check the map array to see whether the new location is free or not
     var adjustedCoords = this.getAdjustedCoords(newX, newY);
-   /* debug({
-        newX:newX,
-        newY:newY,
-        x:adjustedCoords.x,
-        y:adjustedCoords.y
-    });*/
     // gets the corresponding tile number (i and j) for use in retrieval in map
     var i = Math.floor(adjustedCoords.x/this.game.dungeon.tileSize), 
         j = Math.floor(adjustedCoords.y/this.game.dungeon.tileSize); 
+        
+   /* debug({
+        i:i,
+        j:j
+    });*/
 
-    if(i <= 0 || j <= 0 || 
-        i >= Math.floor(this.game.frameWidth) || j >= Math.floor(this.game.frameHeight) ||
-        this.game.dungeon.map[i][j] === 'W' ) {
+    if(this.game.dungeon.map[i][j] === 'W' ) {
         return false; // there's a wall, so obviously can't move there
     }
     
@@ -345,7 +342,7 @@ function Enemy(game, x, y, width, height) {
     this.wanderingDelta = 0; // keep track of how much it has wandered
     this.VELOCITY = 40;
     this.DISTANCE_THRESHOLD = 0; // if the hero is within this distance, attack him
-    this.WANDER_PROBABILITY = 1e-3;
+    this.WANDER_PROBABILITY = 1; // 5e-3
 }
 
 Enemy.prototype = new AnimatedEntity();
@@ -364,39 +361,41 @@ Enemy.prototype.update = function() {
 
     if(this.canAttackHero() || this.wandering) {
         this.direction = this.wandering ? this.direction : this.getDirection();
+        //this.direction = 'left'; // for debugging
+
         switch(this.direction) {
             case 'up':
-                if(this.wandering && !this.isPathClear(this.x, this.y - delta)) {
-                    this.wandering = false;
-                } else {
+                if(this.wandering && this.isPathClear(this.x, this.y - delta)) {
                     this.y -= delta;
+                } else {
+                    this.wandering = false;
                 }
                 this.offsetY = this.baseOffsetY + skipY*3;
                 break;
                 
             case 'down':
-               if(this.wandering && !this.isPathClear(this.x, this.y + delta)) {
-                    this.wandering = false;
-                } else {
+               if(this.wandering && this.isPathClear(this.x, this.y + delta)) {
                     this.y += delta;
+                } else {
+                    this.wandering = false;
                 }
                 this.offsetY = this.baseOffsetY;
                 break;
                 
             case 'right':
-                if(this.wandering && !this.isPathClear(this.x + delta, this.y)) {
-                    this.wandering = false;
-                } else {
+                if(this.wandering && this.isPathClear(this.x + delta, this.y)) {
                     this.x += delta;
+                } else {
+                    this.wandering = false;
                 }
                 this.offsetY = this.baseOffsetY + skipY*2;
                 break;
                 
             case 'left':
-                if(this.wandering && !this.isPathClear(this.x - delta, this.y)) {
-                    this.wandering = false;
-                } else {
+                if(this.wandering && this.isPathClear(this.x - delta, this.y)) {
                     this.x -= delta;
+                } else {
+                    this.wandering = false;
                 }
                 this.offsetY = this.baseOffsetY + skipY;
                 break;
@@ -422,20 +421,19 @@ Enemy.prototype.update = function() {
 
 // get the direction to move based on A* path planning
 Enemy.prototype.getDirection = function() {
-    return this.direction;
+    //return this.direction;
+    return 'left';
 }
 
 // have the enemy move around to make it look more alive
-Enemy.prototype.wanderAround = function(delta) {
+Enemy.prototype.wanderAround = function() {
     var rand = Math.random(),
-        walkDist = Math.ceil(Math.random()*50);
+        walkDist = Math.ceil(Math.random()*50) + 30;
         
     if(this.canAttackHero()) {
         return;
-    } else if(this.wandering) { // don't really need an else-if here, but it looks more structured this way
-        if(this.wanderingDelta >= walkDist) {
-            this.wandering = false;
-        }
+    } else if(this.wandering && this.wanderingDelta >= walkDist) { // don't really need an else-if here, but it looks more structured this way
+        this.wandering = false;
     }
         
     if(rand <= this.WANDER_PROBABILITY) {
@@ -617,7 +615,7 @@ Dungeon.prototype.generateObject = function(i, j, numTilesX, numTilesY) {
         return 'O'; // 'O' for 'Out'; I wanted to save 'E' for Enemy
     } else { // here, we can generate enemies and miscellaneous objects
         
-        var rand = Math.ceil(Math.random()*100), // random number from 0 to 100
+        var rand = Math.random(), // random number from 0.00 to 1 (not including 1)
             xPos = i*this.tileSize,
             yPos = j*this.tileSize;
                 
@@ -625,7 +623,7 @@ Dungeon.prototype.generateObject = function(i, j, numTilesX, numTilesY) {
         if (rand <= this.miscProbability) {
             this.game.addEntity(new Fire(this.game, xPos, yPos, 64, 64));
             return 'M'; // 'M' for Misc.
-        } else if (rand >= 100 - this.enemyProbability) {
+        } else if (rand >= 1 - this.enemyProbability) {
             var enemy = null;
             
             // further subdivide the enemy based on the random number
@@ -731,6 +729,8 @@ function GameEngine(ctx) {
     this.previousKey = null; // keep track of previously pressed key to avoid "sticky" keys
     this.dungeon = null;
     this.hero = null; // keep track of the hero for path planning purposes
+    this.ENEMY_PROBABILITY = 1e-2; // 1e-2
+    this.MISC_PROBABILITY = 5e-3;
 }
 
 GameEngine.prototype.addEntity = function(entity) {
@@ -787,7 +787,9 @@ GameEngine.prototype.update = function() {
 }
 
 GameEngine.prototype.init = function() {
-    this.dungeon = new Dungeon(this, 1e-1, 1e-2); // new dungeon with enemy probability of 10% per free space
+    // enemy probability : 0.1%;
+    // miscellanous probability: 0.01%
+    this.dungeon = new Dungeon(this, this.ENEMY_PROBABILITY, this.MISC_PROBABILITY);
     this.dungeon.generateDungeon();
     // (x, y) = (0, 0), width = 64, height = 64
     var hero = new Hero(this, 60, this.frameHeight - 95, 64, 64);
