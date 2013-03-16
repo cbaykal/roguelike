@@ -399,7 +399,6 @@ Hero.prototype.attackEnemy = function() {
         if (heroRect.isIntersecting(entityRect)) {
             // the enemy is within range, decrement their health based on the attacker's strength
             entity.health -= this.strength; 
-            console.log(entity.health);
         }
     }
 }
@@ -417,6 +416,8 @@ function Enemy(game, x, y, width, height) {
     this.aStar = {}; // will determine the path to follow to reach hero
     this.initHeroPosition = {}; // keep track of the initial hero position in case we need to adjust path
     
+    this.path = []; // will hold the path determined by the path planner
+    this.pathLastUpdated = null;
     this.health = 50;
     this.strength = 1e-3;
     this.wandering = false;
@@ -424,6 +425,8 @@ function Enemy(game, x, y, width, height) {
     this.VELOCITY = 40;
     this.DISTANCE_THRESHOLD = 0; // if the hero is within this distance, attack him
     this.WANDER_PROBABILITY = 5e-3; // 5e-3
+    this.ATTACKING_RANGE = 10;
+    this.TIMER_DELTA_CONSTANT = 10; // for determining the interval to update the path planner
 }
 
 Enemy.prototype = new AnimatedEntity();
@@ -439,20 +442,20 @@ Enemy.prototype.update = function() {
     var delta,
         skipY = 64;
         
-    if(this.game.now && this.game.dungeon.map) {
+    if (this.game.now && this.game.dungeon.map) {
         delta = this.getDeltaPosition();
         this.wanderAround(delta);
     } else {
         return;
     }
 
-    if(this.canAttackHero() || this.wandering) {
+    if (this.canAttackHero() || this.wandering) {
         this.direction = this.wandering ? this.direction : this.getDirection();
         //this.direction = 'left'; // for debugging
 
-        switch(this.direction) {
+        switch (this.direction) {
             case 'up':
-                if(this.wandering && this.isPathClear(this.x, this.y - delta)) {
+                if ((this.wandering && this.isPathClear(this.x, this.y - delta)) || this.canAttackHero()) {
                     this.y -= delta;
                 } else {
                     this.wandering = false;
@@ -461,7 +464,7 @@ Enemy.prototype.update = function() {
                 break;
                 
             case 'down':
-               if(this.wandering && this.isPathClear(this.x, this.y + delta)) {
+               if ((this.wandering && this.isPathClear(this.x, this.y + delta)) || this.canAttackHero()) {
                     this.y += delta;
                 } else {
                     this.wandering = false;
@@ -470,7 +473,7 @@ Enemy.prototype.update = function() {
                 break;
                 
             case 'right':
-                if(this.wandering && this.isPathClear(this.x + delta, this.y)) {
+                if ((this.wandering && this.isPathClear(this.x + delta, this.y)) || this.canAttackHero()) {
                     this.x += delta;
                 } else {
                     this.wandering = false;
@@ -479,7 +482,7 @@ Enemy.prototype.update = function() {
                 break;
                 
             case 'left':
-                if(this.wandering && this.isPathClear(this.x - delta, this.y)) {
+                if ((this.wandering && this.isPathClear(this.x - delta, this.y)) || this.canAttackHero()) {
                     this.x -= delta;
                 } else {
                     this.wandering = false;
@@ -488,15 +491,16 @@ Enemy.prototype.update = function() {
                 break;
         }
         
-        if(this.game.now) {
+        if (this.game.now) {
             this.animation = this.animation && this.direction === this.animation.direction ? this.animation :
                         new Animation(this.image, this.width, this.height, 3, 1.0, this.game.now, this.offsetX, this.offsetY);
             this.animation.direction = this.direction;
             
         }
         
-        if(this.wandering) {
+        if (this.wandering) {
             this.wanderingDelta += delta;
+            this.attackingDirection = null;
         }
     } else {
         this.animation = null;
@@ -506,9 +510,64 @@ Enemy.prototype.update = function() {
     this.lastUpdateTime = this.game.now;
 }
 
+
+Enemy.prototype.distanceToHero = function() {
+    return Math.round(Math.sqrt(Math.pow(this.x - game.hero.x, 2) + Math.pow(this.y - game.hero.y, 2)));
+}
+
 // get the direction to move based on A* path planning
 Enemy.prototype.getDirection = function() {
-    return this.direction;
+    var direction = this.direction;
+    
+    // I found that the most robust implementation of reconstructing the path
+    // is by considering how long it has been since the last path was updated, and 
+    // determining the timer delta by a function that takes into account distance
+    var timerDelta = this.TIMER_DELTA_CONSTANT*this.distanceToHero();
+    
+    if (!this.pathLastUpdated || (this.game.now - this.pathLastUpdated) >= timerDelta) {
+        var planner = new PathFinder(this.game, this.game.hero, this);
+        this.path = planner.findPath(); // update the path
+        this.pathLastUpdated = this.game.now; // record the last updated time
+    }
+
+    // if we are not at the goal position, we need to find the next step on our path to hero
+    if (!this.goalX && !this.goalY || this.isAtGoalPosition()) {
+        var tile = this.path.pop();
+        // pop the tile that we need to go to
+        if (typeof tile === 'undefined') {
+            this.attackingDirection = this.direction;
+            return;
+        }
+
+        this.goalX = tile.x * this.game.dungeon.tileSize;
+        this.goalY = tile.y * this.game.dungeon.tileSize;
+    }
+
+    // decide on the direction based on the current position relative to the goal position
+    if (this.goalX !== this.x) {
+        if (this.goalX < this.x) {// goal lies to the left
+            direction = 'left';
+        } else {
+            direction = 'right';
+        }
+    } else {
+        if (this.goalY < this.y) {
+            direction = 'up';
+        } else {
+            direction = 'down';
+        }
+    }
+    return direction;
+}
+
+// are we at the goal position determined by the path planner?
+Enemy.prototype.isAtGoalPosition = function() {
+   // if((this.x <= this.goalX && this.x + this.scaleToX >= this.goalX) && 
+      // (this.y <= this.goalY && this.y + this.scaleToY >= this.goalY)) {
+       if(this.x === this.goalX && this.y === this.goalY) {
+           return true;
+       }
+    return false;
 }
 
 // have the enemy move around to make it look more alive
@@ -517,6 +576,7 @@ Enemy.prototype.wanderAround = function() {
         walkDist = Math.ceil(Math.random()*50) + 30;
         
     if(this.canAttackHero()) {
+        this.wandering = false;
         return;
     } else if(this.wandering && this.wanderingDelta >= walkDist) { // don't really need an else-if here, but it looks more structured this way
         this.wandering = false;
@@ -540,8 +600,10 @@ Enemy.prototype.wanderAround = function() {
 }
 
 Enemy.prototype.canAttackHero = function() {
-    var distance = Math.sqrt(Math.pow(this.x - this.game.hero.x, 2) + Math.pow(this.y - this.game.hero.y, 2));
-    return distance <= this.DISTANCE_THRESHOLD;
+    /*var distance = Math.sqrt(Math.pow(this.x - this.game.hero.x, 2) + Math.pow(this.y - this.game.hero.y, 2));
+     return distance <= this.DISTANCE_THRESHOLD;*/
+    
+    return true;
 }
 
 Enemy.prototype.explode = function() {
@@ -643,9 +705,9 @@ Animation.prototype.reanimate = function(ctx) {
 function Explosion(game, x, y, width, height) {
     AnimatedEntity.call(this, game, x, y, width, height);
     this.image = ASSET_MANAGER.getAsset('images/explosion.png');
-    this.animation = new Animation(this.image, this.width, this.height, 5, 0.01, game.now, 0, 0, false);
-    this.scaleToX = 24;
-    this.scaleToY = 24;
+    this.animation = new Animation(this.image, this.width, this.height, 5, 0.25, game.now, 0, 0, false);
+    this.scaleToX = 32;
+    this.scaleToY = 32;
 }
 
 Explosion.prototype = new AnimatedEntity();
@@ -915,11 +977,12 @@ GameEngine.prototype.init = function() {
 
     // let's start tracking input
     this.trackEvents();
-    var ogre = new Ogre(this, 400, 300, 32, 48);
-    ogre.direction = 'up';
-    this.addEntity(ogre);
-    var planner = new PathFinder(this, hero, ogre);
-    planner.findPath();
+    var skeleton = new Skeleton(this, 1100, 200, 32, 48);
+    skeleton.direction = 'up';
+    this.addEntity(skeleton);
+    //var planner = new PathFinder(this, hero, skeleton);
+   // skeleton.path = planner.findPath();
+   
 }
 
 GameEngine.prototype.start = function() {

@@ -57,6 +57,7 @@ function PathFinder(game, hero, enemy) {
     this.goalNode = null;
     this.open = [];
     this.closed = [];
+    this.path = [];
     this.nodesConsidered = 0;
     this.MOVEMENT_COST = 10;
     this.HEURISTIC_MULTIPLIER = 10;
@@ -108,10 +109,10 @@ PathFinder.prototype.areNodesEqual = function(nodeOne, nodeTwo) {
 
 // returns whether the node in question is the goal node
 PathFinder.prototype.isGoalNode = function(nodeObject) {
-    var node = nodeObject.node,
-        ret = node.x === this.goalNode.x && node.y === this.goalNode.y;
-    return ret;
-    
+    if(!nodeObject) {
+        return false;
+    }
+    return nodeObject.node.x === this.goalNode.x && nodeObject.node.y === this.goalNode.y;
 }
 
 // need to pay careful attention here because we don't want 
@@ -149,9 +150,13 @@ PathFinder.prototype.inArray = function(array, searchNode) {
 }
 
 // recursive algorithm to print the path
-PathFinder.prototype.printPath = function(node) {
+PathFinder.prototype.getPath = function(node) {
     if(node) {
-        this.printPath(node.parent);
+        this.getPath(node.parent);
+        // ignore start node
+        if(!this.areNodesEqual(this.startNode, node)) { 
+            this.path.unshift(node);
+        } 
         console.log(node);
     }
 }
@@ -168,6 +173,7 @@ PathFinder.prototype.findPath = function() {
         bestNode = {},
         numNodesConsidered = 0;
         
+    this.startNode = startNode;
     // make sure we have the correct h, g, and f values
     startNode.setHAndUpdateF(this.getH(startNode));
     this.open.push(startNode);
@@ -175,11 +181,9 @@ PathFinder.prototype.findPath = function() {
     // get the node with the lowest f value and check to see
     // whether it is the goal node, if it is then we are done
     while (!this.isGoalNode( (bestNode = this.getBestNode()))) {
-        console.log(this.open);
+        //console.log(this.open);
         if(typeof bestNode.node === 'undefined') {
-            console.log('undefined');
             break;
-            
         }
         
         ++numNodesConsidered;
@@ -196,12 +200,20 @@ PathFinder.prototype.findPath = function() {
                 closedIndex = this.inArray(this.closed, node),
                 openIndex = this.inArray(this.open, node);
             
-            // if the node is in the closed array, but its g value is smaller, remove it from the closed array
-            if (closedIndex !== -1) {
+            // if the node is in the closed array, continue on...
+           /* if (closedIndex !== -1) {
                 continue;
-            }
+            }*/
+           // if the node is in the closed array, but its g value is smaller than current, then remove it from closed, else continue
+           if (closedIndex !== -1) {
+               if (this.closed[closedIndex] <= currentCost) {
+                   this.closed.splice(closedIndex, 1);
+               } else {
+                   continue;
+               }
+           }
             
-            // if the node is in the open array, but its g value is larger, remove it from the open array
+            // if the node is in the open array, but its g value is larger than current, remove it from the open array
             if (openIndex !== -1 && this.open[openIndex].g >= currentCost) {
                 this.open.splice(openIndex, 1); // remove it from the closed array
                 
@@ -209,17 +221,14 @@ PathFinder.prototype.findPath = function() {
             
             // if the node is now neither in open nor closed, add it to open
             if(this.inArray(this.open, node) === -1) {
-                // I don't have to readjust g, h, or f since it was already updated in getNeighboringNodes function
+                // I don't have to re-adjust g, h, or f since it was already updated in getNeighboringNodes function
                 node.parent = bestNode.node;
                 this.open.push(node);
-            } else {
-                console.log('already on the open list');
-            }
+            } 
         }
-        
-
     } // end while
     
-    // print the path
-    this.printPath(bestNode.node.parent);
+    // get the path and return it
+    this.getPath(bestNode.node);
+    return this.path;
 }
