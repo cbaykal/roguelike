@@ -165,11 +165,6 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY) {
     var i = Math.floor(adjustedCoords.x/this.game.dungeon.tileSize), 
         j = Math.floor(adjustedCoords.y/this.game.dungeon.tileSize); 
         
-   /* debug({
-        i:i,
-        j:j
-    });*/
-
     if(this.game.dungeon.map[i][j] === 'W' ) {
         return false; // there's a wall, so obviously can't move there
     }
@@ -250,19 +245,49 @@ function Hero(game, x, y, width, height) {
     this.scaleToX = 38
     this.scaleToY = 42;
     this.direction = "up";
+    this.health = 100;
+    this.strength = 1; // how much the hero damages the opponent
     this.VELOCITY = 100;
+    this.ATTACKING_RANGE = 10;
 }
 
 Hero.prototype = new AnimatedEntity();
 Hero.prototype.constructor = Hero;
 
 Hero.prototype.draw = function() {
+    // pre-render and then draw the health bar
+    var offCanvas = document.createElement('canvas'),
+        ctx = offCanvas.getContext('2d'),
+        picWidth = 255;
+        picHeight = 30;
+        
+    offCanvas.width = picWidth;
+    offCanvas.height = picHeight;
+    
+    /*ctx.save();
+    ctx.fillStyle = 'red';
+    ctx.textBaseline = 'top';
+    ctx.font = 'italic 18px Arial';
+    ctx.fillText('Health:', 0, 0);
+    ctx.restore();*/
+    
+    // draw the health bar and its frame; the width of the red health bar depends on the current health
+    ctx.drawImage(ASSET_MANAGER.getAsset('images/health_frame.png'), 0, 0);
+    ctx.drawImage(ASSET_MANAGER.getAsset('images/health.png'), 0, 0, 
+                                          Math.floor(picWidth*this.health/100), picHeight, 0, 0, picWidth, picHeight);
+    
+    this.game.ctx.drawImage(offCanvas, 48, this.game.frameHeight - 40);
+    
     // slightly alter the offset and call the parent class' instance method
     AnimatedEntity.prototype.draw.call(this, this.offsetX - this.width, this.offsetY);
 }
 
 Hero.prototype.update = function() {
-    // && (!this.game.previousKey || this.game.previousKey === this.game.key) 
+    if(this.health <= 0) {
+        this.alive = false;
+        return;
+    }
+    
     var delta = this.game.now ? this.getDeltaPosition() : 0,
         baseOffsetY = 518,
         punchOffset = 514;
@@ -292,6 +317,7 @@ Hero.prototype.update = function() {
             // prevent a bug where pressing the space bar triggers a tremendous offset (since it gets invoked twice)
             // realign the offset of the sprite
             this.offsetY = punchOffset + this.offsetY > baseOffsetY + punchOffset + this.height*3 ? this.offsetY : punchOffset + this.offsetY;
+            this.attackingDirection = this.direction === 'punch' ? this.attackingDirection : this.direction;
             this.direction = "punch";
             break;
         default:
@@ -309,7 +335,12 @@ Hero.prototype.update = function() {
         this.animation.direction = this.direction;
     } else if(this.direction === 'punch' && this.animation && this.animation.isDone()) {
         this.animation = null;
+        this.direction = this.attackingDirection; // this.direction should no longer be 'punch'
         //this.offsetY -= 514;
+    }
+    
+    if(this.direction === 'punch') {
+        this.attackEnemy();
     }
   
     /*else if() { // key is pressed, and an animation is going on => TRICKY
@@ -325,6 +356,50 @@ Hero.prototype.update = function() {
     this.lastUpdateTime = this.game.now;
 }
 
+Hero.prototype.attackEnemy = function() {
+    var rectX1 = this.x, // top left edge
+        rectX2 = this.x + this.scaleToX, // top right edge
+        rectY1 = this.y, // bottom left edge
+        rectY2 = this.y + this.scaleToY; // bottom right edge
+        
+    // adjust the rectangle used for checking intersection with the enemy so that
+    // it is more lenient depending on its ATTACKING_RANGE
+    switch(this.attackingDirection) {
+        case 'up':
+            rectY1 -= this.ATTACKING_RANGE;
+            break;
+        case 'down':
+            rectY2 += this.ATTACKING_RANGE;
+            break;
+        case 'right':
+            rectX2 += this.ATTACKING_RANGE;
+            break;
+        case 'left':
+            rectX1 -= this.ATTACKING_RANGE;
+            break;
+    }
+    
+    var heroRect = new Rectangle(rectX1, rectX2, rectY1, rectY2),
+        entityRect = null;
+    
+    // let's check for collision and damage the opponent(s) if it/they is within range
+    for (var i = 0; i < this.game.entities.length; ++i) {
+        var entity = this.game.entities[i];
+        
+        // obviously we don't want to attack ourself, also attacking a misc. object doesn't make much sense
+        if(entity === this || entity.constructor.name === 'Fire') {
+            continue;
+        }
+        entityRect = new Rectangle(entity.x, entity.x + entity.scaleToX, entity.y, entity.y + entity.scaleToY);
+ 
+        if (heroRect.isIntersecting(entityRect)) {
+            // the enemy is within range, decrement their health based on the attacker's strength
+            entity.health -= this.strength; 
+            console.log(entity.health);
+        }
+    }
+}
+
 function Enemy(game, x, y, width, height) {
     AnimatedEntity.call(this, game, x, y, width, height);
     this.image = null;
@@ -338,17 +413,24 @@ function Enemy(game, x, y, width, height) {
     this.aStar = {}; // will determine the path to follow to reach hero
     this.initHeroPosition = {}; // keep track of the initial hero position in case we need to adjust path
     
+    this.health = 10;
+    this.strength = 1e-3;
     this.wandering = false;
     this.wanderingDelta = 0; // keep track of how much it has wandered
     this.VELOCITY = 40;
     this.DISTANCE_THRESHOLD = 0; // if the hero is within this distance, attack him
-    this.WANDER_PROBABILITY = 1; // 5e-3
+    this.WANDER_PROBABILITY = 5e-3; // 5e-3
 }
 
 Enemy.prototype = new AnimatedEntity();
 Enemy.prototype.constructor = Enemy;
 
 Enemy.prototype.update = function() {
+    if(this.health <= 0) {
+        this.alive = false;
+        return;
+    }
+    
     var delta,
         skipY = 64;
         
@@ -584,9 +666,9 @@ Dungeon.prototype.generateDungeon = function() {
 // return wall based on a sample dungeon
 Dungeon.prototype.isWall = function(i, j, numTilesX, numTilesY) {
     // enclosing rectangular walls for the cave
-    if ((i === 0 || i === numTilesX - 1 || j === 0 || j === numTilesY - 1) ||
-        (i === 4 && j > 8) ||
-        (i >= 4 && i <= 15 && j === 8) ||
+    if ((i === 0 || i === numTilesX - 1 || j === 0 || j >= numTilesY - 2) || 
+        (i === 5 && j > 8) ||
+        (i >= 5 && i <= 15 && j === 8) ||
         (i === 15 && j >= 8 && j <= 20) ||
         (i >= 15 && i <= 20 && j === 20) ||
         (i === 20 && j >= 2 && j <= 20) || 
@@ -773,9 +855,6 @@ GameEngine.prototype.update = function() {
             oldPosition.y = entity.y;
             
             entity.update(); // update the entity
-
-        } else {
-            entities.splice(index, 1); // remove the entity from the entities array
         }
         
         // update the dungeon map to store the entity's new position in the map array
@@ -784,6 +863,15 @@ GameEngine.prototype.update = function() {
          * Note: updating the map really seems to be more trouble than its worth...
          */
     }, this);
+    
+    // now we have to loop backwards and update the entities array
+    // why backwards? Indexing forward and deleting as we go would 
+    // cause an indexOutOfBounds exception since the array no longer 
+    // contains the initial length of items
+    
+    for(var i = this.entities.length - 1; i >= 0; --i) {
+        
+    }
 }
 
 GameEngine.prototype.init = function() {
@@ -792,7 +880,7 @@ GameEngine.prototype.init = function() {
     this.dungeon = new Dungeon(this, this.ENEMY_PROBABILITY, this.MISC_PROBABILITY);
     this.dungeon.generateDungeon();
     // (x, y) = (0, 0), width = 64, height = 64
-    var hero = new Hero(this, 60, this.frameHeight - 95, 64, 64);
+    var hero = new Hero(this, 50, this.frameHeight - 96, 64, 64);
     this.addEntity(hero);
     this.hero = hero;
 
@@ -871,6 +959,8 @@ window.addEventListener('load', function() {
     ASSET_MANAGER.queueDownload('images/monsters.png');
     ASSET_MANAGER.queueDownload('images/hero.png');
     ASSET_MANAGER.queueDownload('images/caveTiles.png');
+    ASSET_MANAGER.queueDownload('images/health.png');
+    ASSET_MANAGER.queueDownload('images/health_frame.png');
     ASSET_MANAGER.queueSound('song.mp3');
     // TODO: Also preload all of the sounds that we will use in the game
     ASSET_MANAGER.downloadAll(function() {

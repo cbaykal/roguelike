@@ -19,9 +19,9 @@ html {
 	padding: 0;
 	margin: 1px auto;
 	
-	-webkit-box-shadow: 0 0 8px #333;
-	-moz-box-shadow: 0 0 8px #333; /* I guess we can add this too even though this a chrome app... */
-	box-shadow: 0 0 8px #333;
+	-webkit-box-shadow: 0 0 12px #333;
+	-moz-box-shadow: 0 0 12px #333; /* I guess we can add this too even though this a chrome app... */
+	box-shadow: 0 0 12px #333;
 	
 	-webkit-border-radius: 4px;
 	-moz-border-radius: 4px;
