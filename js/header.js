@@ -157,18 +157,22 @@ AnimatedEntity.prototype.getDeltaPosition = function() {
 }
 
 // check the proposed x and y bounds and see whether we can move there
-AnimatedEntity.prototype.isPathClear = function(newX, newY) {
+AnimatedEntity.prototype.isPathClear = function(newX, newY, compareEntities) {
     
+    var compareEntities = typeof compareEntities === 'undefined' ? true : compareEntities;
     // let's check the map array to see whether the new location is free or not
     var adjustedCoords = this.getAdjustedCoords(newX, newY);
     // gets the corresponding tile number (i and j) for use in retrieval in map
     var i = Math.floor(adjustedCoords.x/this.game.dungeon.tileSize), 
         j = Math.floor(adjustedCoords.y/this.game.dungeon.tileSize); 
-        
-    if(this.game.dungeon.map[i][j] === 'W' ) {
+
+    if(this.game.dungeon.map[i][j] === 'W') {
         return false; // there's a wall, so obviously can't move there
     }
     
+    if(!compareEntities) {
+        return true;
+    }
     // going to be using a rectangle algorithm to detect collisions
     var heroRect = null, 
         entityRect = null;
@@ -833,7 +837,7 @@ function GameEngine(ctx) {
     this.previousKey = null; // keep track of previously pressed key to avoid "sticky" keys
     this.dungeon = null;
     this.hero = null; // keep track of the hero for path planning purposes
-    this.ENEMY_PROBABILITY = 5e-2; // 5e-2
+    this.ENEMY_PROBABILITY = 0; // 3e-2
     this.MISC_PROBABILITY = 5e-3; // 5e-3
 }
 
@@ -911,6 +915,11 @@ GameEngine.prototype.init = function() {
 
     // let's start tracking input
     this.trackEvents();
+    var ogre = new Ogre(this, 400, 300, 32, 48);
+    ogre.direction = 'up';
+    this.addEntity(ogre);
+    var planner = new PathFinder(this, hero, ogre);
+    planner.findPath();
 }
 
 GameEngine.prototype.start = function() {
@@ -970,12 +979,14 @@ var ASSET_MANAGER = new AssetManager(),
     game;
     
 window.addEventListener('load', function() {
+
     // set canvas width to occupy the whole page
     canvas =  document.getElementById('canvas');
     /*canvas.width = document.width;
     canvas.height = document.height;*/
     
     game = new GameEngine(canvas.getContext('2d'));
+
     var lCanv = game.getLoadingScreen();
     
     // display the loading screen while we load assets

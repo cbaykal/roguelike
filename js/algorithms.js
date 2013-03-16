@@ -29,13 +29,197 @@ Rectangle.prototype.isIntersecting = function(rect) {
 
 
 /*
- * A* Code (path planning) by Cenk Baykal
- * Figured it would be good review of data structures and algorithms
+ * A* path finder implementation by Cenk Baykal
  * I'm going to implement my own simplified variation of A* given the 
  * size of the game. Can improve later on if performance is an issue
  * 
  */
-function aStar() {
+
+// node class to store the tiles in the game
+function Node(x, y, parent, g) {
+    this.x = x;
+    this.y = y;
+    this.parent = parent;
+    this.g = g;
+    this.h = 0;
+    this.f = 0;
+}
+
+Node.prototype.setHAndUpdateF = function(h) {
+    this.h = h;
+    this.f = this.g + h;
+}
+
+function PathFinder(game, hero, enemy) {
+    this.game = game;
+    this.hero = hero;
+    this.enemy = enemy;
+    this.goalNode = null;
+    this.open = [];
+    this.closed = [];
+    this.nodesConsidered = 0;
+    this.MOVEMENT_COST = 10;
+    this.HEURISTIC_MULTIPLIER = 10;
+}
+
+PathFinder.prototype.getTile = function(x, y) {
+    return {
+        i: Math.floor(x/this.game.dungeon.tileSize),
+        j: Math.floor(y/this.game.dungeon.tileSize)
+    }
+}
+
+// returns the Manhattan distance between two nodes
+PathFinder.prototype.manhattanDistance = function(nodeOne, nodeTwo) {
+    return Math.abs(nodeOne.x - nodeTwo.x) + Math.abs(nodeOne.y - nodeTwo.y);
+}
+
+PathFinder.prototype.getH = function(node) {
+    return this.HEURISTIC_MULTIPLIER*this.manhattanDistance(node, this.goalNode);
+}
+
+// returns the node with the lowest f value where f = g + h
+// since I'm not using a priority queue, I have to find the minimum
+// the old fashioned way which runs in O(n)...
+// Why do we return the index as well? I need the index to remove it from
+// the open array with splice
+// TODO: Use a priority queue instead
+PathFinder.prototype.getBestNode = function() {
+    var bestNode = this.open[0],
+        index = 0;
+    
+    this.open.forEach(function(node, i) {
+        if(node.f <= bestNode.f) {
+            bestNode = node;
+            index = i;
+        }
+    }, this);
+
+    return {
+        node: bestNode,
+        index: index
+    }
+}
+
+// function for determining whether two nodes are equal
+PathFinder.prototype.areNodesEqual = function(nodeOne, nodeTwo) {
+    return nodeOne.x === nodeTwo.x && nodeOne.y === nodeTwo.y;
+}
+
+// returns whether the node in question is the goal node
+PathFinder.prototype.isGoalNode = function(nodeObject) {
+    var node = nodeObject.node,
+        ret = node.x === this.goalNode.x && node.y === this.goalNode.y;
+    return ret;
     
 }
 
+// need to pay careful attention here because we don't want 
+// nodes that are walls/entities, etc
+PathFinder.prototype.getNeighboringNodes = function(node) {
+    var neighbors = [], // array to keep track of the neighboring nodes
+        directions = [[-1,0], [0, -1], [1, 0], [0, 1]];
+    
+    directions.forEach(function(direction) {
+        var newX = node.x + direction[0],
+            newY = node.y + direction[1];
+            
+        // check to see whether the path is clear
+       if(this.enemy.isPathClear(newX*this.game.dungeon.tileSize, newY*this.game.dungeon.tileSize, false)) {
+            var newNode = new Node(newX, newY, node, node.g + this.MOVEMENT_COST);
+            newNode.setHAndUpdateF(this.getH(newNode));
+            // add it to the neighbors array
+            neighbors.push(newNode);
+       }
+    }, this);
+    
+    return neighbors;
+}
+
+// check to see whether a node is in the given array
+PathFinder.prototype.inArray = function(array, searchNode) {
+    for (var i = 0; i < array.length; ++i) {
+        var node = array[i];
+        if (this.areNodesEqual(node, searchNode)) {
+            return i;
+        }
+    }
+    
+    return -1;
+}
+
+// recursive algorithm to print the path
+PathFinder.prototype.printPath = function(node) {
+    if(node) {
+        this.printPath(node.parent);
+        console.log(node);
+    }
+}
+
+PathFinder.prototype.findPath = function() {
+    // declare the goal node
+    var tile = this.getTile(this.hero.x, this.hero.y);
+
+    this.goalNode = new Node(tile.i, tile.j, null, 0);
+    
+    tile = this.getTile(this.enemy.x, this.enemy.y);
+
+    var startNode = new Node(tile.i, tile.j, null, 0),
+        bestNode = {},
+        numNodesConsidered = 0;
+        
+    // make sure we have the correct h, g, and f values
+    startNode.setHAndUpdateF(this.getH(startNode));
+    this.open.push(startNode);
+   
+    // get the node with the lowest f value and check to see
+    // whether it is the goal node, if it is then we are done
+    while (!this.isGoalNode( (bestNode = this.getBestNode()))) {
+        console.log(this.open);
+        if(typeof bestNode.node === 'undefined') {
+            console.log('undefined');
+            break;
+            
+        }
+        
+        ++numNodesConsidered;
+        // remove the node in question from the open array
+        this.open.splice(bestNode.index, 1); // this is where using the node's index comes into play
+        // add it to the closed array
+        this.closed.push(bestNode.node);
+        
+        var neighbors = this.getNeighboringNodes(bestNode.node);
+
+        for (var i = 0; i < neighbors.length; ++i) {
+            var node = neighbors[i];
+            var currentCost = bestNode.node.g + this.MOVEMENT_COST,
+                closedIndex = this.inArray(this.closed, node),
+                openIndex = this.inArray(this.open, node);
+            
+            // if the node is in the closed array, but its g value is smaller, remove it from the closed array
+            if (closedIndex !== -1) {
+                continue;
+            }
+            
+            // if the node is in the open array, but its g value is larger, remove it from the open array
+            if (openIndex !== -1 && this.open[openIndex].g >= currentCost) {
+                this.open.splice(openIndex, 1); // remove it from the closed array
+                
+            }
+            
+            // if the node is now neither in open nor closed, add it to open
+            if(this.inArray(this.open, node) === -1) {
+                // I don't have to readjust g, h, or f since it was already updated in getNeighboringNodes function
+                node.parent = bestNode.node;
+                this.open.push(node);
+            } else {
+                console.log('already on the open list');
+            }
+        }
+        
+
+    } // end while
+    
+    // print the path
+    this.printPath(bestNode.node.parent);
+}
