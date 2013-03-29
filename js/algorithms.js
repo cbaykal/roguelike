@@ -12,8 +12,6 @@ function Rectangle(x1, x2, y1, y2) {
     this.y2 = y2; // bottom-most
 }
 
-
-
 // returns whether the rectangle intersects with another one
 Rectangle.prototype.isIntersecting = function(rect) {
     
@@ -132,7 +130,7 @@ PathFinder.prototype.getNeighboringNodes = function(node) {
             // add it to the neighbors array
             neighbors.push(newNode);
        } else {
-           console.log('newX: ' + newX + ' newY: ' + newY);
+           //console.log('newX: ' + newX + ' newY: ' + newY);
        }
     }, this);
     
@@ -206,17 +204,9 @@ PathFinder.prototype.findPath = function() {
                 openIndex = this.inArray(this.open, node);
             
             // if the node is in the closed array, continue on...
-           /* if (closedIndex !== -1) {
+            if (closedIndex !== -1) {
                 continue;
-            }*/
-           // if the node is in the closed array, but its g value is smaller than current, then remove it from closed, else continue
-           if (closedIndex !== -1) {
-               if (this.closed[closedIndex] <= currentCost) {
-                   this.closed.splice(closedIndex, 1);
-               } else {
-                   continue;
-               }
-           }
+            }
             
             // if the node is in the open array, but its g value is larger than current, remove it from the open array
             if (openIndex !== -1 && this.open[openIndex].g >= currentCost) {
