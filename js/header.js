@@ -143,7 +143,6 @@ AnimatedEntity.prototype.draw = function(offsetX, offsetY) {
         offsetX = typeof offsetX === 'undefined' ? 0 : offsetX;
         offsetY = typeof offsetY === 'undefined' ? 0 : offsetY;
         this.game.ctx.drawImage(this.image, offsetX, offsetY, this.width, this.height, this.x, this.y, this.scaleToX, this.scaleToY);
-        
     }
 }
 
@@ -152,13 +151,7 @@ AnimatedEntity.prototype.update = function() {
 
 AnimatedEntity.prototype.getDeltaPosition = function() {
     var elapsedTime = (this.game.now - this.lastUpdateTime);
-    /*
-    if(this.constructor.name === 'Hero') {
-        debug({
-            elapsedTime: elapsedTime,
-            result: Math.round(elapsedTime/1000*this.VELOCITY)
-        });
-    }*/
+    
     // fixed bug where elapsedTime > 30 would cause entities to never move; 200 is much safer
     return elapsedTime > 200 ? 0 : Math.round(elapsedTime / 1000 * this.VELOCITY); // to avoid wormholes
 }
@@ -177,8 +170,12 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, c
         tileY = Math.floor(adjustedCoords.y/this.game.dungeon.tileSize);
         
     var i =  tileX < 0 ? 1 : tileX, 
-        j = tileY < 0 ? 1 : tileY; 
-
+        j = tileY < 0 ? 1 : tileY;
+        
+    if(i < 0 || j < 0 || i > 49 || j > 26) {
+        alert('error! \ni: ' + i + '\nj: ' + j);
+    }
+    
     if(this.game.dungeon.map[i][j] === 'W') {
         return false; // there's a wall, so obviously can't move there
     }
@@ -186,6 +183,7 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, c
     if(!compareEntities) {
         return true;
     }
+    
     // going to be using a rectangle algorithm to detect collisions
     var heroRect = null, 
         entityRect = null;
@@ -212,6 +210,31 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, c
     
     return true;
 }
+
+// returns the correct direction the entity should be facing to validly attack the enemy
+/*AnimatedEntity.prototype.getCorrectAttackingDirection = function(enemy) {
+    var deltaX = Math.abs(this.x - enemy.x),
+        deltaY = Math.abs(this.y - enemy.y),
+        direction = "";
+    
+    
+    if(deltaX < deltaY) {
+        // x positions are closer, turn the y direction
+        if(this.y > enemy.y) {
+            direction = "up";
+        } else {
+            direction = "down";
+        }
+    } else {
+        if(this.x > enemy.x) {
+            direction = "left";
+        } else {
+            direction = "right";
+        }
+    }
+    
+    return direction;
+}*/
 
 AnimatedEntity.prototype.attackEnemy = function() {
     var rectX1 = this.x, // top left edge
@@ -302,14 +325,34 @@ function Hero(game, x, y, width, height) {
     this.scaleToX = 38
     this.scaleToY = 42;
     this.direction = "up";
+    this.experience = 0;
+    this.neededExperienceToLevel = 100;
     this.health = 100;
     this.strength = 1; // how much the hero damages the opponent
     this.VELOCITY = 100;
     this.ATTACKING_RANGE = 10;
+    this.RECOVERY_RATE = this.health/1e4;
 }
 
 Hero.prototype = new AnimatedEntity();
 Hero.prototype.constructor = Hero;
+
+// function to increase the Hero's experience and level up accordingly
+Hero.prototype.addExperience = function(addAmount) {
+    var updatedExperience = this.experience + addAmount;
+    
+    if(updatedExperience >= this.neededExperienceToLevel) {
+        // level up
+        this.levelUp();
+    } else {
+        this.experience = updatedExperience;
+    }
+}
+
+// level up
+Hero.prototype.levelUp = function() {
+    alert('leveled up!!');
+}
 
 Hero.prototype.draw = function() {
     // pre-render and then draw the health bar
@@ -329,11 +372,26 @@ Hero.prototype.draw = function() {
     ctx.restore();*/
     
     // draw the health bar and its frame; the width of the red health bar depends on the current health
+    var drawnHealth = Math.floor(picWidth*this.health/100);
+    
     ctx.drawImage(ASSET_MANAGER.getAsset('images/health_frame.png'), 0, 0);
     ctx.drawImage(ASSET_MANAGER.getAsset('images/health.png'), 0, 0, 
-                                          Math.floor(picWidth*this.health/100), picHeight, 0, 0, Math.floor(picWidth*this.health/100), picHeight);
+                                         drawnHealth, picHeight, 0, 0, drawnHealth, picHeight);
     
     this.game.ctx.drawImage(offCanvas, 48, this.game.frameHeight - 40);
+    
+    // clear the canvas
+    ctx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+    
+    // now draw the experience bar
+    
+    var drawnExperience = Math.floor(picWidth*this.experience/this.neededExperienceToLevel);
+
+    ctx.drawImage(ASSET_MANAGER.getAsset('images/experience_frame.png'), 0, 0);
+    ctx.drawImage(ASSET_MANAGER.getAsset('images/experience.png'), 0, 0,
+                  drawnExperience, picHeight, 0, 0, drawnExperience, picHeight);
+                  
+    this.game.ctx.drawImage(offCanvas, 48 + picWidth, this.game.frameHeight - 40);
     
     // slightly alter the offset and call the parent class' instance method
     AnimatedEntity.prototype.draw.call(this, this.offsetX - this.width, this.offsetY);
@@ -342,6 +400,9 @@ Hero.prototype.draw = function() {
 Hero.prototype.update = function() {
     if(this.health <= 0) {
         this.alive = false;
+        /*
+         * TODO: Add a game over function
+         */
         return;
     }
     
@@ -352,9 +413,6 @@ Hero.prototype.update = function() {
     switch(this.game.key) {
         case 38: // up
             this.y -= this.isPathClear(this.x, this.y - delta, true) ? delta : 0;
-            debug({
-                delta:delta
-            });
             this.offsetY = baseOffsetY;
             this.direction = 'up';
             break;
@@ -401,6 +459,9 @@ Hero.prototype.update = function() {
     
     if(this.direction === 'punch') {
         this.attackEnemy();
+    } else {
+        // recover health while not in combat
+        this.recoverHealth();
     }
   
     /*else if() { // key is pressed, and an animation is going on => TRICKY
@@ -416,6 +477,10 @@ Hero.prototype.update = function() {
     this.lastUpdateTime = this.game.now;
 }
 
+Hero.prototype.recoverHealth = function() {
+    var newHealth = this.health += this.RECOVERY_RATE;
+    this.health = newHealth > 100 ? 100 : newHealth;
+}
 
 function Enemy(game, x, y, width, height) {
     AnimatedEntity.call(this, game, x, y, width, height);
@@ -438,6 +503,7 @@ function Enemy(game, x, y, width, height) {
     this.WANDER_PROBABILITY = 5e-3; // 5e-3
     this.ATTACKING_RANGE = 10;
     this.TIMER_DELTA_CONSTANT = 10; // for determining the interval to update the path planner
+    this.EXPERIENCE_WORTH = 10; // how much experience the hero gains if this enemy is slain
 }
 
 Enemy.prototype = new AnimatedEntity();
@@ -447,6 +513,7 @@ Enemy.prototype.update = function() {
     if(this.health <= 0) {
         this.alive = false; // no longer alive, so the master update thread should take care of removing it
         this.explode(); // replace this entity with an explosion animation
+        this.game.hero.addExperience(this.EXPERIENCE_WORTH);
         return;
     }
     
@@ -462,7 +529,7 @@ Enemy.prototype.update = function() {
 
     if (this.canAttackHero() || this.wandering) {
         this.direction = this.wandering ? this.direction : this.getDirection();
- 
+        
         switch (this.direction) {
             case 'up':
                 if ((this.wandering && this.isPathClear(this.x, this.y - delta)) || this.canAttackHero()) {
@@ -508,7 +575,7 @@ Enemy.prototype.update = function() {
         
         if (this.game.now) {
             this.animation = this.animation && this.direction === this.animation.direction ? this.animation :
-                        new Animation(this.image, this.width, this.height, 3, 1.0, this.game.now, this.offsetX, this.offsetY);
+                             new Animation(this.image, this.width, this.height, 3, 1.0, this.game.now, this.offsetX, this.offsetY);
             this.animation.direction = this.direction;
         }
         
@@ -532,17 +599,20 @@ Enemy.prototype.distanceToHero = function() {
 Enemy.prototype.getDirection = function() {
     var direction = this.direction;
     
+    if(!this.isPathClear(this.x, this.y, false, true, false)) {
+        return direction;
+    }
     // I found that the most robust implementation of reconstructing the path
     // is by considering how long it has been since the last path was updated, and 
     // determining the timer delta by a function that takes into account distance
     var timerDelta = this.TIMER_DELTA_CONSTANT*this.distanceToHero();
     
+    // if there is no path at hand, or we need to update our path...
     if (!this.path || !this.pathLastUpdated || (this.game.now - this.pathLastUpdated) >= timerDelta) {
         var planner = new PathFinder(this.game, this.game.hero, this),
             foundPath = planner.findPath();
          // update the path if there were no errors in finding it
         this.path = (foundPath || !this.path) ? foundPath : this.path;
-        
         this.pathLastUpdated = this.game.now; // record the last updated time
     }
 
@@ -1080,6 +1150,8 @@ window.addEventListener('load', function() {
     ASSET_MANAGER.queueDownload('images/health.png');
     ASSET_MANAGER.queueDownload('images/health_frame.png');
     ASSET_MANAGER.queueDownload('images/explosion.png');
+    ASSET_MANAGER.queueDownload('images/experience_frame.png');
+    ASSET_MANAGER.queueDownload('images/experience.png');
     
     // Download sounds
     ASSET_MANAGER.queueSound('song.mp3');
