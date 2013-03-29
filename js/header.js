@@ -152,8 +152,15 @@ AnimatedEntity.prototype.update = function() {
 
 AnimatedEntity.prototype.getDeltaPosition = function() {
     var elapsedTime = (this.game.now - this.lastUpdateTime);
-    
-    return elapsedTime > 30 ? 0 : Math.round(elapsedTime / 1000 * this.VELOCITY); // to avoid wormholes
+    /*
+    if(this.constructor.name === 'Hero') {
+        debug({
+            elapsedTime: elapsedTime,
+            result: Math.round(elapsedTime/1000*this.VELOCITY)
+        });
+    }*/
+    // fixed bug where elapsedTime > 30 would cause entities to never move; 200 is much safer
+    return elapsedTime > 200 ? 0 : Math.round(elapsedTime / 1000 * this.VELOCITY); // to avoid wormholes
 }
 
 // check the proposed x and y bounds and see whether we can move there
@@ -242,10 +249,9 @@ AnimatedEntity.prototype.attackEnemy = function() {
         }
         entityRect = new Rectangle(entity.x, entity.x + entity.scaleToX, entity.y, entity.y + entity.scaleToY);
  
-        if (heroRect.isIntersecting(entityRect)) {
+        if (heroRect.isIntersecting(entityRect) && entity.health > 0) {
             // the enemy is within range, decrement their health based on the attacker's strength
             entity.health -= this.strength; 
-            console.log(entity.health);
         }
     }
 }
@@ -270,8 +276,8 @@ AnimatedEntity.prototype.getAdjustedCoords = function(newX, newY) {
             y = newY + this.scaleToY;
             break;
         case 'left':
-            x = newX + this.scaleToX/2;
-            y = newY + this.scaleToY;
+            x = newX;
+            y = newY + this.scaleToY/2;
             break;
             
         case 'punch':
@@ -346,6 +352,9 @@ Hero.prototype.update = function() {
     switch(this.game.key) {
         case 38: // up
             this.y -= this.isPathClear(this.x, this.y - delta, true) ? delta : 0;
+            debug({
+                delta:delta
+            });
             this.offsetY = baseOffsetY;
             this.direction = 'up';
             break;
@@ -629,7 +638,7 @@ function Ogre(game, x, y, width, height) {
     this.baseOffsetY = 13;
     this.scaleToX = 24; // 32
     this.scaleToY = 24; // 38
-    this.VELOCITY = 100;
+    this.VELOCITY = 30;
     this.DISTANCE_THRESHOLD = 100; // if the hero is within this distance, attack him
 }
 
@@ -651,7 +660,7 @@ function Skeleton(game, x, y, width, height) {
     this.baseOffsetY = 13;
     this.scaleToX = 24;
     this.scaleToY = 24;
-    this.VELOCITY = 40
+    this.VELOCITY = 30;
     this.DISTANCE_THRESHOLD = 100;
 }
 
@@ -910,7 +919,7 @@ function GameEngine(ctx) {
     this.previousKey = null; // keep track of previously pressed key to avoid "sticky" keys
     this.dungeon = null;
     this.hero = null; // keep track of the hero for path planning purposes
-    this.ENEMY_PROBABILITY = 3e-2; // 3e-2
+    this.ENEMY_PROBABILITY = 2e-2; // 3e-2
     this.MISC_PROBABILITY = 5e-3; // 5e-3
 }
 
@@ -1008,8 +1017,7 @@ GameEngine.prototype.start = function() {
         that.now = time;
         that.loop();
         requestAnimationFrame(gameLoop, that.ctx); // ctx as 2nd argument so that we don't reanimate while ctx is out of view
-    })();
-    // let's make it call itself and get the ball rolling...
+    })(); // let's make it call itself and get the ball rolling...
 }
 
 GameEngine.prototype.trackEvents = function() {
