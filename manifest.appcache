@@ -1,14 +1,20 @@
 CACHE MANIFEST
-# 3
+# 9
 CACHE:
 images/fire.png
 images/monsters.png
 images/hero.png
+images/caveTiles.png
+images/health.png
+images/health_frame.png
+images/explosion.png
 
 song.mp3
 
 js/header.js
+js/algorithms.js
 index.html
 
 NETWORK:
 *
+    
