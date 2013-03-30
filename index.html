@@ -4,13 +4,39 @@
 	<head>
 		<meta charset="utf-8">
 		<title>RogueLike Game</title>
-		<!-- Do I really need jQuery?
-			<script src="http://code.jquery.com/jquery-latest.min.js"></script>-->
+		<link rel="stylesheet" href="css/ui-darkness/jquery-ui-1.10.2.custom.min.css">
 		<link rel="stylesheet" href="css/style.css">
+		<!--jQuery-->
+		<script src="js/jquery-1.9.1.js"></script>
+		<script src="js/jquery-ui-1.10.2.custom.min.js"></script>
+		<!--Game-->
 		<script src="js/algorithms.js"></script>
+		<script src="js/messageLog.js"></script>
+		<script src="js/inventory.js"></script>
+		<script src="js/stats.js"></script>
 		<script src="js/header.js"></script>
 	</head>
 	<body>
 		<canvas id="canvas" height="648" width="1200"></canvas>
+		<div class="gameDialog" id="options" title="inventory">
+			<button id="stats">Statistics</button>
+			<button id="messages">Message Log</button>
+			<button id="inventory">Inventory</button>
+		</div>
+		<div class="gameDialog" id="messagesDialog" title="Message Log"></div>
+		<div id="statsDialog" title="Your Statistics">
+			<p>Health: <span id="health"></span></p>
+			<p>Experience: <span id="experience"></span></p>
+			<p>Level: <span id="level"></span></p>
+			<p>Strength: <span id="strength"></span></p>
+			<!--<p>Defense: <span id="defense"></span></p>-->
+			<p>Enemies Slain: <span id="enemiesSlain"></span></p>
+		</div>
+		<div class="gameDialog" id="inventoryDialog" title="Your Inventory">
+			<p>
+				Inventory...
+			</p>
+			<button>press me</button>
+		</div>
 	</body>
 </html>

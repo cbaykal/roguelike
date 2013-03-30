@@ -327,6 +327,8 @@ function Hero(game, x, y, width, height) {
     this.direction = "up";
     this.experience = 0;
     this.neededExperienceToLevel = 100;
+    this.level = 1; // start at level 1
+    this.enemiesSlain = 0; // keep track of enemies slain just for fun and for statistics
     this.health = 100;
     this.strength = 1; // how much the hero damages the opponent
     this.VELOCITY = 100;
@@ -340,61 +342,77 @@ Hero.prototype.constructor = Hero;
 // function to increase the Hero's experience and level up accordingly
 Hero.prototype.addExperience = function(addAmount) {
     var updatedExperience = this.experience + addAmount;
+    ++this.enemiesSlain; // increment enemies slain amount
     
     if(updatedExperience >= this.neededExperienceToLevel) {
         // level up
         this.levelUp();
+        this.game.msgLog.log('Congratulations, you have reached level ' + this.level + '!');
     } else {
         this.experience = updatedExperience;
+        this.game.msgLog.log('You gain ' + addAmount + ' experience points.');
     }
 }
 
 // level up
 Hero.prototype.levelUp = function() {
-    alert('leveled up!!');
+    this.experience = 0; // reset experience
+    this.neededExperienceToLevel *= 1.25; // increase the experience needed to level for the next level
+    ++this.level;
 }
 
 Hero.prototype.draw = function() {
     // pre-render and then draw the health bar
     var offCanvas = document.createElement('canvas'),
         ctx = offCanvas.getContext('2d'),
-        picWidth = 255;
+        startDrawingX = 48,
+        startDrawingY = this.game.frameHeight - 40,
+        picWidth = 255, // was 255 before
+        barWidth = 200,
         picHeight = 30;
         
     offCanvas.width = picWidth;
     offCanvas.height = picHeight;
     
-    /*ctx.save();
-    ctx.fillStyle = 'red';
-    ctx.textBaseline = 'top';
-    ctx.font = 'italic 18px Arial';
-    ctx.fillText('Health:', 0, 0);
-    ctx.restore();*/
-    
     // draw the health bar and its frame; the width of the red health bar depends on the current health
-    var drawnHealth = Math.floor(picWidth*this.health/100);
+    var xOffset = 27, // required for correct positioning of the contents of the bar
+        drawnHealth = Math.round(barWidth*this.health/100);
     
-    ctx.drawImage(ASSET_MANAGER.getAsset('images/health_frame.png'), 0, 0);
-    ctx.drawImage(ASSET_MANAGER.getAsset('images/health.png'), 0, 0, 
-                                         drawnHealth, picHeight, 0, 0, drawnHealth, picHeight);
+    ctx.drawImage(ASSET_MANAGER.getAsset('images/experience_frame.png'), 0, 0);
+    ctx.drawImage(ASSET_MANAGER.getAsset('images/health2.png'), xOffset, 0, 
+                                         drawnHealth, picHeight, xOffset, 0, drawnHealth, picHeight);
     
-    this.game.ctx.drawImage(offCanvas, 48, this.game.frameHeight - 40);
+    this.game.ctx.drawImage(offCanvas, startDrawingX, startDrawingY);
     
     // clear the canvas
     ctx.clearRect(0, 0, offCanvas.width, offCanvas.height);
     
     // now draw the experience bar
-    
-    var drawnExperience = Math.floor(picWidth*this.experience/this.neededExperienceToLevel);
-
+    var drawnExperience = Math.round(barWidth*this.experience/this.neededExperienceToLevel);
+        
     ctx.drawImage(ASSET_MANAGER.getAsset('images/experience_frame.png'), 0, 0);
-    ctx.drawImage(ASSET_MANAGER.getAsset('images/experience.png'), 0, 0,
-                  drawnExperience, picHeight, 0, 0, drawnExperience, picHeight);
+    ctx.drawImage(ASSET_MANAGER.getAsset('images/experience.png'), xOffset, 0,
+                                         drawnExperience, picHeight, xOffset, 0, drawnExperience, picHeight);
                   
-    this.game.ctx.drawImage(offCanvas, 48 + picWidth, this.game.frameHeight - 40);
+    this.game.ctx.drawImage(offCanvas, startDrawingX + picWidth, startDrawingY);
+    
+    // let's display the stats
+   /* ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.fillStyle = 'red';
+    ctx.textBaseline = 'top';
+    ctx.font = 'italic 12px Arial';
+    ctx.fillText('Strength: ' + , 0, 0);
+    ctx.restore();*/
     
     // slightly alter the offset and call the parent class' instance method
     AnimatedEntity.prototype.draw.call(this, this.offsetX - this.width, this.offsetY);
+}
+
+Hero.prototype.displayHeroStats = function() {
+    var button = document.createElement('button');
+    
+    button.style = "position:absolute, x: 50px, y: 50px";
 }
 
 Hero.prototype.update = function() {
@@ -403,6 +421,9 @@ Hero.prototype.update = function() {
         /*
          * TODO: Add a game over function
          */
+        this.game = new GameEngine(this.game.ctx);
+        this.game.init();
+        this.game.start();
         return;
     }
     
@@ -475,6 +496,7 @@ Hero.prototype.update = function() {
     }*/
    
     this.lastUpdateTime = this.game.now;
+    this.stats.update();
 }
 
 Hero.prototype.recoverHealth = function() {
@@ -514,6 +536,7 @@ Enemy.prototype.update = function() {
         this.alive = false; // no longer alive, so the master update thread should take care of removing it
         this.explode(); // replace this entity with an explosion animation
         this.game.hero.addExperience(this.EXPERIENCE_WORTH);
+        this.game.msgLog.log('You have slain the ' + this.constructor.name + '!');
         return;
     }
     
@@ -532,7 +555,7 @@ Enemy.prototype.update = function() {
         
         switch (this.direction) {
             case 'up':
-                if ((this.wandering && this.isPathClear(this.x, this.y - delta)) || this.canAttackHero()) {
+                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x, this.y - delta)) {
                     this.y -= delta;
                 } else {
                     this.wandering = false;
@@ -541,7 +564,7 @@ Enemy.prototype.update = function() {
                 break;
                 
             case 'down':
-               if ((this.wandering && this.isPathClear(this.x, this.y + delta)) || this.canAttackHero()) {
+               if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x, this.y + delta)) {
                     this.y += delta;
                 } else {
                     this.wandering = false;
@@ -550,7 +573,7 @@ Enemy.prototype.update = function() {
                 break;
                 
             case 'right':
-                if ((this.wandering && this.isPathClear(this.x + delta, this.y)) || this.canAttackHero()) {
+                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x + delta, this.y)) {
                     this.x += delta;
                 } else {
                     this.wandering = false;
@@ -559,7 +582,7 @@ Enemy.prototype.update = function() {
                 break;
                 
             case 'left':
-                if ((this.wandering && this.isPathClear(this.x - delta, this.y)) || this.canAttackHero()) {
+                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x - delta, this.y)) {
                     this.x -= delta;
                 } else {
                     this.wandering = false;
@@ -651,7 +674,7 @@ Enemy.prototype.getDirection = function() {
 Enemy.prototype.isAtGoalPosition = function() {
     var enemyRect = new Rectangle(this.x, this.x + this.scaleToX, this.y, this.y + this.scaleToY),
         heroRect = new Rectangle(this.game.hero.x, this.game.hero.x + this.game.hero.scaleToX, 
-                                this.game.hero.y, this.game.hero.y + this.game.hero.scaleToY);
+                                 this.game.hero.y, this.game.hero.y + this.game.hero.scaleToY);
                                 
     if (enemyRect.isIntersecting(heroRect)) {
         return true;
@@ -989,6 +1012,7 @@ function GameEngine(ctx) {
     this.previousKey = null; // keep track of previously pressed key to avoid "sticky" keys
     this.dungeon = null;
     this.hero = null; // keep track of the hero for path planning purposes
+    this.msgLog = new MessageLog();
     this.ENEMY_PROBABILITY = 2e-2; // 3e-2
     this.MISC_PROBABILITY = 5e-3; // 5e-3
 }
@@ -1056,18 +1080,21 @@ GameEngine.prototype.update = function() {
 }
 
 GameEngine.prototype.init = function() {
-    
     // enemy probability : 0.1%;
-    // miscellanous probability: 0.01%
+    // miscellaneous probability: 0.01%
     this.dungeon = new Dungeon(this, this.ENEMY_PROBABILITY, this.MISC_PROBABILITY);
     this.dungeon.generateDungeon();
     // (x, y) = (0, 0), width = 64, height = 64
+    // initialize our hero
     var hero = new Hero(this, 50, this.frameHeight - 96, 64, 64);
-    this.addEntity(hero);
+    hero.inventory = new Inventory(this); // new inventory for the hero
+    hero.stats = new Stats(this);
     this.hero = hero;
-
+    this.addEntity(hero);
     // let's start tracking input
     this.trackEvents();
+    // position buttons for stats, inventory, and options
+    this.positionGameButtons();
 }
 
 GameEngine.prototype.start = function() {
@@ -1121,6 +1148,19 @@ GameEngine.prototype.getLoadingScreen = function() {
     return canv; // return the canvas
 }
 
+GameEngine.prototype.positionGameButtons = function() {
+    var $div = $('#options'),
+        $canvas = $('#canvas'),
+        xOffset = -40,
+        yOffset = -(this.dungeon.tileSize*2 - $div.height())/2; // center the buttons vertically
+
+    // place the buttons to the lower right of the canvas
+    $div.css({
+        left: $canvas.offset().left + $canvas.width() - $div.width() + xOffset,
+        top: $canvas.offset().top + $canvas.height() - $div.height() + yOffset,
+    });
+}
+
 var ASSET_MANAGER = new AssetManager(), 
     canvas,
     game;
@@ -1148,6 +1188,7 @@ window.addEventListener('load', function() {
     ASSET_MANAGER.queueDownload('images/hero.png');
     ASSET_MANAGER.queueDownload('images/caveTiles.png');
     ASSET_MANAGER.queueDownload('images/health.png');
+    ASSET_MANAGER.queueDownload('images/health2.png');
     ASSET_MANAGER.queueDownload('images/health_frame.png');
     ASSET_MANAGER.queueDownload('images/explosion.png');
     ASSET_MANAGER.queueDownload('images/experience_frame.png');
@@ -1161,6 +1202,7 @@ window.addEventListener('load', function() {
         // these two should be the only two statements here
         game.init();
         game.start();
+        game.msgLog.log('Welcome to Roguelike!');
        // ASSET_MANAGER.getSound('song.mp3').play();
     });
 }, false);
