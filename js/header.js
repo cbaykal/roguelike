@@ -6,8 +6,7 @@ window.requestAnimationFrame = (function() {
            window.oRequestAnimationFrame || 
            window.msRequestAnimationFrame ||
     function(callback, element) {
-        window.setTimeout(callback, 1000 / 60);
-        // 60 fps
+        window.setTimeout(callback, 1000 / 60); // 60 fps
     };
 })();
 
@@ -44,8 +43,8 @@ AssetManager.prototype.downloadAll = function(callback) {
     this.loadAllSounds(callback);
 
     this.downloadQueue.forEach(function(path) {
-        var image = new Image(), that = this;
-        // inside the callback function called from addEventListener, this refers to the image object
+        var image = new Image(), 
+            that = this; // inside the callback function called from addEventListener, this refers to the image object
         image.addEventListener('load', function() {++that.successCount;
             if (that.isDone()) {
                 callback();
@@ -63,9 +62,9 @@ AssetManager.prototype.downloadAll = function(callback) {
 
 AssetManager.prototype.loadAllSounds = function(callback) {
     this.soundsQueue.forEach(function(path) {
-        var sound = new Audio(path), that = this;
-        sound.preload = 'auto';
-        // not sure whether this is necessary, but just in case...
+        var sound = new Audio(path), 
+            that = this;
+        sound.preload = 'auto'; // not sure whether this is necessary, but just in case...
         sound.addEventListener('canplay', function() {++that.successCount;
             if (that.isDone()) {
                 callback();
@@ -203,9 +202,19 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, c
         entityRect = new Rectangle(entity.x, entity.x + entity.scaleToX, entity.y + entity.scaleToY*(1/5), entity.y + entity.scaleToY);
         heroRect = new Rectangle(newX, newX + this.scaleToX*3/4, newY + this.scaleToY/2, newY + this.scaleToY);
         
-        if (heroRect.isIntersecting(entityRect)) {
+       /* if (heroRect.isIntersecting(entityRect)) {
             return false;
-        }
+        }*/
+       
+       // is it something the hero can pick up?
+       if (heroRect.isIntersecting(entityRect)) {
+           // if it is a gem, we want the hero to pick up the gem
+           if (this.constructor.name === 'Hero' && entity.constructor.name === 'Gem') {
+               entity.pickUp(); // pick up the gem
+           } else {
+               return false;
+           }
+       }
     }
     
     return true;
@@ -532,11 +541,15 @@ Enemy.prototype = new AnimatedEntity();
 Enemy.prototype.constructor = Enemy;
 
 Enemy.prototype.update = function() {
+    // is the enemy slain?
     if(this.health <= 0) {
         this.alive = false; // no longer alive, so the master update thread should take care of removing it
         this.explode(); // replace this entity with an explosion animation
-        this.game.hero.addExperience(this.EXPERIENCE_WORTH);
+        var that = this;
+        setTimeout(function() { that.dropLoot(); }, 500); // drop loot right after the explosion animation
+        
         this.game.msgLog.log('You have slain the ' + this.constructor.name + '!');
+        this.game.hero.addExperience(this.EXPERIENCE_WORTH);
         return;
     }
     
@@ -634,6 +647,7 @@ Enemy.prototype.getDirection = function() {
     if (!this.path || !this.pathLastUpdated || (this.game.now - this.pathLastUpdated) >= timerDelta) {
         var planner = new PathFinder(this.game, this.game.hero, this),
             foundPath = planner.findPath();
+            
          // update the path if there were no errors in finding it
         this.path = (foundPath || !this.path) ? foundPath : this.path;
         this.pathLastUpdated = this.game.now; // record the last updated time
@@ -668,6 +682,14 @@ Enemy.prototype.getDirection = function() {
         }
     }
     return direction;
+}
+
+
+Enemy.prototype.dropLoot = function() {
+    var rand = Math.random(); // number from [0, 1)
+    if(rand <= 1) { // 10% chance of dropping loot
+        this.game.addEntity(new Gem(this.game, this.x, this.y, 32, 32, 'blue'));
+    }
 }
 
 // are we at the goal position determined by the path planner?
@@ -815,9 +837,11 @@ Animation.prototype.reanimate = function(ctx) {
     this.startTime = window.performance.now();
 }
 
+// Explosion object for displaying after the enemy is slain
 function Explosion(game, x, y, width, height) {
     AnimatedEntity.call(this, game, x, y, width, height);
     this.image = ASSET_MANAGER.getAsset('images/explosion.png');
+    // 5 frames, 0.5 seconds total animation time
     this.animation = new Animation(this.image, this.width, this.height, 5, 0.5, game.now, 0, 0, false);
     this.scaleToX = 32;
     this.scaleToY = 32;
@@ -830,6 +854,27 @@ Explosion.prototype.update = function() {
     if(this.animation.isDone()) {
         this.alive = false;
     }
+}
+
+// loot dropped off after an enemy is slain
+function Gem(game, x, y, width, height, color) {
+    AnimatedEntity.call(this, game, x, y, width, height);
+    this.color = color;
+    this.image = ASSET_MANAGER.getAsset('images/' + color + '_crystal32.png');
+    // 8 frames, 1 second total animation time
+    this.animation = new Animation(this.image, this.width, this.height, 8, 1.75, game.now, 0, 0, true);
+    this.scaletoX = 24;
+    this.scaleToY = 24;
+}
+
+Gem.prototype = new AnimatedEntity();
+Gem.prototype.constructor = Gem;
+
+// makes the hero gain this item
+Gem.prototype.pickUp = function() {
+    this.game.msgLog.log('Picked up a ' + this.color + ' gem!');
+    this.game.hero.inventory.addItem(new Item(this.game, 'blue_gem', {attribute: 'strength', magnitude: 10}));
+    this.alive = false; // remove from the world
 }
 
 function Dungeon(game, enemyProbability, miscProbability) {
@@ -1193,6 +1238,8 @@ window.addEventListener('load', function() {
     ASSET_MANAGER.queueDownload('images/explosion.png');
     ASSET_MANAGER.queueDownload('images/experience_frame.png');
     ASSET_MANAGER.queueDownload('images/experience.png');
+    ASSET_MANAGER.queueDownload('images/blue_crystal16.png');
+    ASSET_MANAGER.queueDownload('images/blue_crystal32.png');
     
     // Download sounds
     ASSET_MANAGER.queueSound('song.mp3');
