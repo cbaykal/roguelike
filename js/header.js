@@ -210,7 +210,7 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, c
        if (heroRect.isIntersecting(entityRect)) {
            // if it is a gem, we want the hero to pick up the gem
            if (this.constructor.name === 'Hero' && entity.constructor.name === 'Gem') {
-               entity.pickUp(); // pick up the gem
+               entity.pickUp(entity.color); // pick up the gem
            } else {
                return false;
            }
@@ -342,7 +342,7 @@ function Hero(game, x, y, width, height) {
     this.strength = 1; // how much the hero damages the opponent
     this.VELOCITY = 100;
     this.ATTACKING_RANGE = 10;
-    this.RECOVERY_RATE = this.health/1e4;
+    this.RECOVERY_RATE = this.health/1e4; 
 }
 
 Hero.prototype = new AnimatedEntity();
@@ -351,7 +351,6 @@ Hero.prototype.constructor = Hero;
 // function to increase the Hero's experience and level up accordingly
 Hero.prototype.addExperience = function(addAmount) {
     var updatedExperience = this.experience + addAmount;
-    ++this.enemiesSlain; // increment enemies slain amount
     
     if(updatedExperience >= this.neededExperienceToLevel) {
         // level up
@@ -361,6 +360,12 @@ Hero.prototype.addExperience = function(addAmount) {
         this.experience = updatedExperience;
         this.game.msgLog.log('You gain ' + addAmount + ' experience points.');
     }
+}
+
+// adds the amount to the current health accordingly
+Hero.prototype.addHealth = function(addAmount) {
+    var newHealth = this.health + addAmount;
+    this.health = newHealth > 100 ? 100 : newHealth;
 }
 
 // level up
@@ -416,12 +421,6 @@ Hero.prototype.draw = function() {
     
     // slightly alter the offset and call the parent class' instance method
     AnimatedEntity.prototype.draw.call(this, this.offsetX - this.width, this.offsetY);
-}
-
-Hero.prototype.displayHeroStats = function() {
-    var button = document.createElement('button');
-    
-    button.style = "position:absolute, x: 50px, y: 50px";
 }
 
 Hero.prototype.update = function() {
@@ -508,9 +507,9 @@ Hero.prototype.update = function() {
     this.stats.update();
 }
 
+// recover health automatically over time
 Hero.prototype.recoverHealth = function() {
-    var newHealth = this.health += this.RECOVERY_RATE;
-    this.health = newHealth > 100 ? 100 : newHealth;
+    this.addHealth(this.RECOVERY_RATE);
 }
 
 function Enemy(game, x, y, width, height) {
@@ -546,6 +545,7 @@ Enemy.prototype.update = function() {
         this.alive = false; // no longer alive, so the master update thread should take care of removing it
         this.explode(); // replace this entity with an explosion animation
         var that = this;
+        ++this.game.hero.enemiesSlain; // increment enemies slain amount
         setTimeout(function() { that.dropLoot(); }, 500); // drop loot right after the explosion animation
         
         this.game.msgLog.log('You have slain the ' + this.constructor.name + '!');
@@ -684,12 +684,20 @@ Enemy.prototype.getDirection = function() {
     return direction;
 }
 
-
 Enemy.prototype.dropLoot = function() {
-    var rand = Math.random(); // number from [0, 1)
-    if(rand <= 1) { // 10% chance of dropping loot
-        this.game.addEntity(new Gem(this.game, this.x, this.y, 32, 32, 'blue'));
-    }
+    var gemColor = this.getRandomGemColor();
+    
+    // generate a new Gem entity and add it to the game
+    this.game.addEntity(new Gem(this.game, this.x, this.y, 32, 32, gemColor));
+}
+
+// returns a random color for dropping loot
+Enemy.prototype.getRandomGemColor = function() {
+    var rand = Math.random(), // generate a number within the range [0, 1)
+        gemColors = this.game.GEM_COLORS,
+        probInterval = 1/gemColors.length;
+        
+    return gemColors[Math.floor(rand/probInterval)];
 }
 
 // are we at the goal position determined by the path planner?
@@ -698,13 +706,10 @@ Enemy.prototype.isAtGoalPosition = function() {
         heroRect = new Rectangle(this.game.hero.x, this.game.hero.x + this.game.hero.scaleToX, 
                                  this.game.hero.y, this.game.hero.y + this.game.hero.scaleToY);
                                 
-    if (enemyRect.isIntersecting(heroRect)) {
+    if (enemyRect.isIntersecting(heroRect) || (this.x <= this.goalX && this.x + this.scaleToX >= this.goalX) && 
+       (this.y <= this.goalY && this.y + this.scaleToY >= this.goalY) ) {
         return true;
-    } else if ((this.x <= this.goalX && this.x + this.scaleToX >= this.goalX) && 
-       (this.y <= this.goalY && this.y + this.scaleToY >= this.goalY)) {
-       //if(this.x === this.goalX && this.y === this.goalY) {
-           return true;
-    }
+    } 
     return false;
 }
 
@@ -860,7 +865,7 @@ Explosion.prototype.update = function() {
 function Gem(game, x, y, width, height, color) {
     AnimatedEntity.call(this, game, x, y, width, height);
     this.color = color;
-    this.image = ASSET_MANAGER.getAsset('images/' + color + '_crystal32.png');
+    this.image = ASSET_MANAGER.getAsset('images/' + color + '_gem.png');
     // 8 frames, 1 second total animation time
     this.animation = new Animation(this.image, this.width, this.height, 8, 1.75, game.now, 0, 0, true);
     this.scaletoX = 24;
@@ -872,8 +877,28 @@ Gem.prototype.constructor = Gem;
 
 // makes the hero gain this item
 Gem.prototype.pickUp = function() {
+    // will hold a function to the effect
+    var  activateEffect = null;
+        
     this.game.msgLog.log('Picked up a ' + this.color + ' gem!');
-    this.game.hero.inventory.addItem(new Item(this.game, 'blue_gem', {attribute: 'strength', magnitude: 10}));
+    
+    // determine the gem's effect based on its color
+    switch (this.color) {
+        // blue: increase experience by 10
+        case 'blue':
+            activateEffect = function(hero) { hero.addExperience(10); }
+            break;
+        // green: increase strength by 1
+        case 'green':
+            activateEffect = function(hero) { ++hero.strength; }
+            break;
+        // red: increase health by 10
+        case 'red':
+            activateEffect = function(hero) { hero.addHealth(10); }
+            break;
+    }
+    
+    this.game.hero.inventory.addItem(new Item(this.game, this.color + '_gem', activateEffect));
     this.alive = false; // remove from the world
 }
 
@@ -1060,6 +1085,7 @@ function GameEngine(ctx) {
     this.msgLog = new MessageLog();
     this.ENEMY_PROBABILITY = 2e-2; // 3e-2
     this.MISC_PROBABILITY = 5e-3; // 5e-3
+    this.GEM_COLORS = ['blue', 'green', 'red'];
 }
 
 GameEngine.prototype.addEntity = function(entity) {
@@ -1238,8 +1264,10 @@ window.addEventListener('load', function() {
     ASSET_MANAGER.queueDownload('images/explosion.png');
     ASSET_MANAGER.queueDownload('images/experience_frame.png');
     ASSET_MANAGER.queueDownload('images/experience.png');
-    ASSET_MANAGER.queueDownload('images/blue_crystal16.png');
-    ASSET_MANAGER.queueDownload('images/blue_crystal32.png');
+    // queue all of the gems
+    for (var i = 0; i < game.GEM_COLORS.length; ++i) {
+        ASSET_MANAGER.queueDownload('images/' + game.GEM_COLORS[i] + '_gem.png');
+    }
     
     // Download sounds
     ASSET_MANAGER.queueSound('song.mp3');

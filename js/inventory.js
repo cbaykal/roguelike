@@ -3,10 +3,10 @@
  */
 
 // item class
-function Item(game, type, effect) {
+function Item(game, type, activateEffect) {
     this.game = game;
     this.type = type;
-    this.effect = effect;
+    this.activateEffect = activateEffect;
     this.quantity = 1;
 }
 
@@ -24,9 +24,9 @@ Inventory.prototype.addItem = function(item) {
     var inBag = this.contains(item); // is the item already in the bag?
     
     if (inBag) {
-        var index = this.getItemIndex(item);
+        var index = this.getItemIndexByType(item.type);
         // increase item quantity and update its display
-        this.updateQuantityDisplay(index, ++this.items[index].quantity); // update the display of inventory
+        this.updateQuantityDisplay(item.type, ++this.items[index].quantity); // update the display of inventory
     } else {
         // we have already done a check for whether the inventory is full upon picking the item up,
         // so just create a new slot for the item
@@ -38,8 +38,7 @@ Inventory.prototype.addItem = function(item) {
 
 // add actual slot for the item to the dialog
 Inventory.prototype.addSlot = function(type) {
-    this.$dialog.append('<div id="item' + this.numDistinctItems + 
-                          '"><span class="quantity">1</span></div>');
+    this.$dialog.append('<div id="' + type + '"><span class="quantity">1</span></div>');
     this.setBackgroundImage(type, this.numDistinctItems);
 }
 
@@ -53,25 +52,43 @@ Inventory.prototype.contains = function(item) {
     return false;
 }
 
-Inventory.prototype.setBackgroundImage = function(type, itemNum) {
-    var src = 'url(images/';
+Inventory.prototype.setBackgroundImage = function(type) {
+    var src = 'url(images/',
+        tooltip = "";
+        
     switch (type) {
         case 'blue_gem':
-            src += 'blue_crystal32.png';
+            src += 'blue_gem.png';
+            tooltip = 'increase strength by 1';
             break;
         case 'green_gem':
-            src += 'green_crystal32.png';
+            src += 'green_gem.png';
+            tooltip = 'increase strength by 1';
             break;
-            
+        case 'pink_gem':
+            src += 'pink_gem.png';
+            tooltip = 'increase strength by 1';
+            break;
+        case 'red_gem':
+            src += 'red_gem.png';
+            tooltip = 'increase strength by 1';
+            break;
+        case 'yellow_gem':
+            src += 'yellow_gem.png';
+            tooltip = 'increase strength by 1';
+            break;
     }
     
-    // set the background to the correct item image
-    $('#inventoryDialog > div#item' + itemNum).css("background", src + ') no-repeat');
+    // set the background to the correct item image and the tooltip
+    $('#inventoryDialog > div#' + type).css("background", src + ') no-repeat')
+                                       .attr("title", tooltip);
+    
+    $(document).tooltip();
 }
 
-Inventory.prototype.getItemIndex = function(item) {
+Inventory.prototype.getItemIndexByType = function(type) {
     for (var i = 0; i < this.items.length; ++i) {
-        if (this.items[i].type === item.type) {
+        if (this.items[i].type === type) {
             return i;
         }
     }
@@ -83,13 +100,29 @@ Inventory.prototype.isFull = function() {
     return (this.numDistinctItems >= this.maxNumItems);
 }
 
-Inventory.prototype.updateQuantityDisplay = function(itemIndex, quantity) {
+Inventory.prototype.updateQuantityDisplay = function(type, quantity) {
     // update the quantity displayed
-    $('#inventoryDialog > div#item' + itemIndex + ' > .quantity').text(quantity);
+    $('#inventoryDialog > div#' + type + ' > .quantity').text(quantity);
 }
 
-Inventory.prototype.useItem = function(item) {
+// uses the item with the given ID
+Inventory.prototype.useItem = function(itemID) {
+    var item = this.items[itemID];
     
+    // use the items's effect
+    item.activateEffect(this.game.hero);
+    
+    // remove the item
+    if (item.quantity === 1) {
+        // need to remove it from the array and from the inventory dialog
+        $('#inventoryDialog div').eq(itemID)
+                                 .remove();
+                                 
+        this.items.splice(itemID, 1); // remove it from the array as well
+        --this.numDistinctItems;
+    } else {
+       this.updateQuantityDisplay(this.items[itemID].type, --item.quantity);
+    }
 }
 
 Inventory.prototype.init = function() {   
@@ -109,15 +142,20 @@ Inventory.prototype.init = function() {
     
     // display on click
     $('#inventory').button().click(function() {
-        var $dialog = $('#inventoryDialog');
+        var $dialog = $('#inventoryDialog'),
+            command = "";
         
-        if ($dialog.dialog('isOpen')) {
-            $dialog.dialog('close');
-        } else {
-            $dialog.dialog('open');
-        }
+        command = $dialog.dialog('isOpen') ? 'close' : 'open';
+        $dialog.dialog(command);
     });
     
     // for future reference
     this.$dialog = $('#inventoryDialog');
+    
+    // allow the user to use the item on click
+    var that = this;
+    this.$dialog.on('click', 'div', function() {
+        var index = that.getItemIndexByType($(this).attr('id'));
+        that.useItem(index);
+    });
 }

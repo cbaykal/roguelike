@@ -25,12 +25,11 @@ Stats.prototype.init = function() {
     });
     
     $('#stats').button().click(function() {
-        var $dialog = $('#statsDialog');
-        if($dialog.dialog('isOpen')) {
-            $dialog.dialog('close');
-        } else {
-            $dialog.dialog('open');
-        }
+        var $dialog = $('#statsDialog'),
+            command = "";
+        
+        command = $dialog.dialog('isOpen') ? 'close' : 'open';
+        $dialog.dialog(command);
     });
     
     // for future reference
