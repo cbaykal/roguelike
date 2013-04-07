@@ -109,12 +109,40 @@ AssetManager.prototype.getAsset = function(path) {
 AssetManager.prototype.playSound = function(path, repeat) {
     // if the context is defined and the buffer exists
     if (this.audioContext && this.sounds[path]) {
-        var source = this.audioContext.createBufferSource();
+        var source = this.audioContext.createBufferSource(),
+            gainNode = this.audioContext.createGainNode();
+            
+        gainNode.gain.value = 0.05; // keep the atmospheric sounds low in volume
+        gainNode.connect(this.audioContext.destination);
         source.buffer = this.sounds[path]; // set the buffer
         source.loop = typeof repeat === 'undefined' ? true : repeat;
-        source.connect(this.audioContext.destination);
+        source.connect(gainNode);
         source.noteOn(0); // play immediately
         return source;
+    }
+}
+
+// play sound with respect to the entity's position (enemies, gems, etc. call this function)
+AssetManager.prototype.playSoundWithPosition = function(entity, path, repeat) {
+    // if the context is defined and the buffer exists
+    if (this.audioContext && this.sounds[path]) {
+        var source = this.audioContext.createBufferSource(),
+            panner = this.audioContext.createPanner();
+
+        panner.coneOuterAngle = 180;
+        panner.coneInnerAngle = 0;
+        panner.coneOuterGain = 1;
+        // set the panner's position to the entity's position (y is negated on purpose due to different coordinate origins)
+        panner.setPosition(entity.x, -entity.y, 0);
+        panner.connect(this.audioContext.destination);
+        source.buffer = this.sounds[path];
+        source.loop = typeof repeat === 'undefined' ? true : repeat;
+        source.connect(panner);
+        source.noteOn(0);
+        return {
+            source: source,
+            panner: panner
+       }
     }
 }
 
@@ -182,26 +210,34 @@ AnimatedEntity.prototype.draw = function(offsetX, offsetY) {
     }
 }
 
+AnimatedEntity.prototype.distanceToHero = function() {
+    return Math.round(Math.sqrt(Math.pow(this.x - game.hero.x, 2) + Math.pow(this.y - game.hero.y, 2)));
+}
+
+
 AnimatedEntity.prototype.update = function() {
 }
 
-AnimatedEntity.prototype.emitSound = function(soundName) {
+AnimatedEntity.prototype.emitSound = function(soundName, repeat) {
     if (!this.sound.isPlaying) {
         // playing for the very first time
         this.sound.name = soundName;
-        this.sound.source = ASSET_MANAGER.playSound(soundName);
+        this.sound.source = ASSET_MANAGER.playSoundWithPosition(this, soundName, repeat);
         this.sound.isPlaying = true;
     } else if (this.sound.isPlaying && this.sound.name !== soundName) {
-        this.sound.source.noteOff(0); // stop playing the current sound
+        this.sound.source.source.noteOff(0); // stop playing the current sound
         this.sound.name = soundName;
-        this.sound.source = ASSET_MANAGER.playSound(soundName);
+        this.sound.source = ASSET_MANAGER.playSoundWithPosition(this, soundName, repeat);
         this.sound.isPlaying = true;
+    } else if (this.sound.isPlaying && this.sound.name === soundName) {
+        // update the position
+        this.sound.source.panner.setPosition(this.x, -this.y, 0);
     }
 }
 
 AnimatedEntity.prototype.stopSound = function() {
-    if(this.sound.source && this.sound.isPlaying) {
-        this.sound.source.noteOff(0); // stop immediately
+    if(this.sound.source && this.sound.source.source && this.sound.isPlaying) {
+        this.sound.source.source.noteOff(0); // stop immediately
         this.sound.source = null;
         this.sound.name = null;
         this.sound.isPlaying = false;
@@ -436,8 +472,8 @@ Hero.prototype.levelUp = function() {
 }
 
 Hero.prototype.draw = function() {
-    // pre-render and then draw the health bar
-    var offCanvas = document.createElement('canvas'),
+   // pre-render and then draw the health bar
+   var offCanvas = document.createElement('canvas'),
         ctx = offCanvas.getContext('2d'),
         startDrawingX = 48,
         startDrawingY = this.game.frameHeight - 40,
@@ -498,6 +534,16 @@ Hero.prototype.emitSound = function(soundName) {
     }
 }
 
+// override
+Hero.prototype.stopSound = function() {
+    if(this.sound.source && this.sound.isPlaying) {
+        this.sound.source.noteOff(0); // stop immediately
+        this.sound.source = null;
+        this.sound.name = null;
+        this.sound.isPlaying = false;
+    }
+}
+
 Hero.prototype.update = function() {
     if(this.health <= 0) {
         this.alive = false;
@@ -545,11 +591,14 @@ Hero.prototype.update = function() {
             this.offsetY = punchOffset + this.offsetY > baseOffsetY + punchOffset + this.height*3 ? this.offsetY : punchOffset + this.offsetY;
             this.attackingDirection = this.direction === 'punch' ? this.attackingDirection : this.direction;
             this.direction = 'punch';
+            this.emitSound('sounds/punch.wav');
             break;
         default:
             this.game.key = null;
             this.game.previousKey = null;
-            this.stopSound();
+            if (this.direction !== 'punch') {
+                this.stopSound();
+            }
     }
     
     if(!this.game.key && this.animation && this.direction !== 'punch') { // hero is currently animated, but no key is pressed => end animation
@@ -583,8 +632,11 @@ Hero.prototype.update = function() {
         this.animation = new Animation(ASSET_MANAGER.getAsset('images/hero.png'), this.width, this.height, 8, 0.5, this.game.now, this.offsetX, this.offsetY);
     }*/
    
-    this.lastUpdateTime = this.game.now;
+    // update the AudioListener with the entity's positions
+    this.game.audioContext.listener.setPosition(this.x, -this.y, 0);
+    // update info about the hero
     this.stats.update();
+    this.lastUpdateTime = this.game.now;
 }
 
 // recover health automatically over time
@@ -623,6 +675,8 @@ Enemy.prototype.update = function() {
     // is the enemy slain?
     if(this.health <= 0) {
         this.alive = false; // no longer alive, so the master update thread should take care of removing it
+        this.emitSound('sounds/monster_dying.wav', false);
+        //this.stopSound(); // stop any sound it was making
         this.explode(); // replace this entity with an explosion animation
         var that = this;
         ++this.game.hero.enemiesSlain; // increment enemies slain amount
@@ -703,12 +757,14 @@ Enemy.prototype.update = function() {
         this.animation = null;
     }
     
+    if (this.canAttackHero()) {
+        // emit the monster groaning sound
+        this.emitSound('sounds/monster.wav');
+    } else {
+        this.stopSound();
+    }
+    
     this.lastUpdateTime = this.game.now;
-}
-
-
-Enemy.prototype.distanceToHero = function() {
-    return Math.round(Math.sqrt(Math.pow(this.x - game.hero.x, 2) + Math.pow(this.y - game.hero.y, 2)));
 }
 
 // get the direction to move based on A* path planning
@@ -950,17 +1006,28 @@ function Gem(game, x, y, width, height, color) {
     this.animation = new Animation(this.image, this.width, this.height, 8, 1.75, game.now, 0, 0, true);
     this.scaletoX = 24;
     this.scaleToY = 24;
+    this.DISTANCE_THRESHOLD = 150;
 }
 
 Gem.prototype = new AnimatedEntity();
 Gem.prototype.constructor = Gem;
 
+// override
+Gem.prototype.update = function() {
+    // emit shining sound if the hero is close to the gem
+    if (this.distanceToHero() < this.DISTANCE_THRESHOLD) {
+        this.emitSound('sounds/shine.wav');
+    }
+    // call the parent's method as well
+    AnimatedEntity.prototype.update.call(this);
+}
 // makes the hero gain this item
 Gem.prototype.pickUp = function() {
     // will hold a function to the effect
     var  activateEffect = null;
         
     this.game.msgLog.log('Picked up a ' + this.color + ' gem!');
+    this.emitSound('sounds/itemGain.mp3', false); 
     
     // determine the gem's effect based on its color
     switch (this.color) {
@@ -1350,8 +1417,11 @@ window.addEventListener('load', function() {
     }
     
     // Download sounds
+    ASSET_MANAGER.queueSound('sounds/itemGain.mp3');
     ASSET_MANAGER.queueSound('sounds/levelUp.wav');
     ASSET_MANAGER.queueSound('sounds/monster.wav');
+    ASSET_MANAGER.queueSound('sounds/monster_dying.wav');
+    ASSET_MANAGER.queueSound('sounds/punch.wav');
     ASSET_MANAGER.queueSound('sounds/shine.wav');
     ASSET_MANAGER.queueSound('sounds/walking.wav');
     
