@@ -562,28 +562,48 @@ Hero.prototype.update = function() {
         
     switch(this.game.key) {
         case 38: // up
-            this.y -= this.isPathClear(this.x, this.y - delta, true) ? delta : 0;
+            if (this.isPathClear(this.x, this.y - delta, true)) {
+                this.y -= delta;
+                this.emitSound('sounds/walking.wav');
+            } else {
+                this.emitSound('sounds/bump.wav');
+            }
+            //this.y -= this.isPathClear(this.x, this.y - delta, true) ? delta : 0;
             this.offsetY = baseOffsetY;
             this.direction = 'up';
-            this.emitSound('sounds/walking.wav');
             break;
         case 40: // down
-            this.y += this.isPathClear(this.x, this.y + delta, true) ? delta : 0;
+            if (this.isPathClear(this.x, this.y + delta, true)) {
+                this.y += delta;
+                this.emitSound('sounds/walking.wav');
+            } else {
+                this.emitSound('sounds/bump.wav');
+            }
+            //this.y += this.isPathClear(this.x, this.y + delta, true) ? delta : 0;
             this.offsetY = baseOffsetY + this.height * 2;
             this.direction = 'down';
-            this.emitSound('sounds/walking.wav');
             break;
         case 37: // left
-            this.x -= this.isPathClear(this.x - delta, this.y, true) ? delta : 0;
+            if (this.isPathClear(this.x - delta, this.y, true)) {
+                this.x -= delta;
+                this.emitSound('sounds/walking.wav');
+            } else {
+                this.emitSound('sounds/bump.wav');
+            }
+            //this.x -= this.isPathClear(this.x - delta, this.y, true) ? delta : 0;
             this.offsetY = baseOffsetY + this.height;
             this.direction = 'left';
-            this.emitSound('sounds/walking.wav');
             break;
         case 39: // right
-            this.x += this.isPathClear(this.x + delta, this.y, true) ? delta : 0;
+            if (this.isPathClear(this.x + delta, this.y, true)) {
+                this.x += delta;
+                this.emitSound('sounds/walking.wav');
+            } else {
+                this.emitSound('sounds/bump.wav');
+            }
+            //this.x += this.isPathClear(this.x + delta, this.y, true) ? delta : 0;
             this.offsetY = baseOffsetY + this.height*3;
             this.direction = 'right';
-            this.emitSound('sounds/walking.wav');
             break;         
         case 32: // space (to punch)
             // prevent a bug where pressing the space bar triggers a tremendous offset (since it gets invoked twice)
@@ -1231,7 +1251,7 @@ function GameEngine(ctx) {
     this.hero = null; // keep track of the hero for path planning purposes
     this.msgLog = new MessageLog();
     this.ENEMY_PROBABILITY = 2e-2; // 3e-2
-    this.MISC_PROBABILITY = 5e-3; // 5e-3
+    this.MISC_PROBABILITY = 1e-3; // 5e-3
     this.GEM_COLORS = ['blue', 'green', 'red'];
 }
 
@@ -1417,6 +1437,7 @@ window.addEventListener('load', function() {
     }
     
     // Download sounds
+    ASSET_MANAGER.queueSound('sounds/bump.wav');
     ASSET_MANAGER.queueSound('sounds/itemGain.mp3');
     ASSET_MANAGER.queueSound('sounds/levelUp.wav');
     ASSET_MANAGER.queueSound('sounds/monster.wav');
