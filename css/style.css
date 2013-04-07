@@ -32,6 +32,11 @@ html {
 	height: auto;
 	width: auto;
 	position: absolute;
+	display: none; /*initially hide the options dialog while we load game assets*/
+}
+
+#options button {
+	font-size: 1em;
 }
 
 #statsDialog p {
@@ -40,33 +45,6 @@ html {
 
 #statsDialog span {
 	color: #FFF;
-}
-
-/*#options button {
-	cursor: pointer;
-	background: #000;
-	border: 1px solid #FFF;
-	border-radius: 5px;
-	color: #FFF;
-	display: inline-block;
-	font-family: system, sans-serif;
-	font-size: 16px;
-	padding: 5px 10px;
-	text-shadow: 0 0 0 rgba(255, 255, 255, 0.3);
-}
-
-#options button:hover {
-	background: #FFF;
-	color: #000;
-}*/
-
-/*override jQuery UI font size*/
-.ui-widget {
-	font-size: 0.9em;
-}
-
-#options button {
-	font-size: 1em;
 }
 
 #messagesDialog {
@@ -100,4 +78,32 @@ html {
 	
 	color: yellow;
 	font-size: 11px;
+}
+
+/* initially hide all of the dialogs */
+#statsDialog, #inventoryDialog, #messagesDialog {
+	display: none;
+}
+
+/*#options button {
+	cursor: pointer;
+	background: #000;
+	border: 1px solid #FFF;
+	border-radius: 5px;
+	color: #FFF;
+	display: inline-block;
+	font-family: system, sans-serif;
+	font-size: 16px;
+	padding: 5px 10px;
+	text-shadow: 0 0 0 rgba(255, 255, 255, 0.3);
+}
+
+#options button:hover {
+	background: #FFF;
+	color: #000;
+}*/
+
+/*override jQuery UI font size*/
+.ui-widget {
+	font-size: 0.9em;
 }

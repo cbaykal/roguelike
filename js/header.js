@@ -18,13 +18,15 @@ function debug(object) {
 }
 
 // Utilize an Asset Manager to deal with image/sprite and sound loading (*New: cache update)
-function AssetManager() {
+function AssetManager(game) {
+    this.game = null;
     this.downloadQueue = [];
     this.soundsQueue = [];
     this.successCount = 0;
     this.errorCount = 0;
     this.cache = {};
     this.sounds = {};
+    this.audioContext = null;
 }
 
 AssetManager.prototype.queueDownload = function(path) {
@@ -35,7 +37,9 @@ AssetManager.prototype.queueSound = function(path) {
     this.soundsQueue.push(path);
 }
 
-AssetManager.prototype.downloadAll = function(callback) {
+AssetManager.prototype.downloadAll = function(game, callback) {
+    this.game = game;
+    
     if (this.downloadQueue.length === 0 && this.soundsQueue.length === 0) {
         calllback();
     }
@@ -45,12 +49,14 @@ AssetManager.prototype.downloadAll = function(callback) {
     this.downloadQueue.forEach(function(path) {
         var image = new Image(), 
             that = this; // inside the callback function called from addEventListener, this refers to the image object
-        image.addEventListener('load', function() {++that.successCount;
+        image.addEventListener('load', function() {
+            ++that.successCount;
             if (that.isDone()) {
                 callback();
             }
         }, false);
-        image.addEventListener('error', function() {++that.errorCount;
+        image.addEventListener('error', function() {
+            ++that.errorCount;
             if (that.isDone()) {
                 callback();
             }
@@ -61,21 +67,36 @@ AssetManager.prototype.downloadAll = function(callback) {
 }
 
 AssetManager.prototype.loadAllSounds = function(callback) {
+    // initialize the audio context
+    try {
+        this.audioContext = new webkitAudioContext();
+        this.game.audioContext = this.audioContext;
+    } catch(e) {
+        alert('Your browser does not support the Web Audio API');
+    }
+    
     this.soundsQueue.forEach(function(path) {
-        var sound = new Audio(path), 
+        var request = new XMLHttpRequest(),
             that = this;
-        sound.preload = 'auto'; // not sure whether this is necessary, but just in case...
-        sound.addEventListener('canplay', function() {++that.successCount;
-            if (that.isDone()) {
-                callback();
-            }
-        }, false);
-        sound.addEventListener('error', function() {++that.errorCount;
-            if (that.isDone()) {
-                callback();
-            }
-        }, false);
-        this.sounds[path] = sound;
+            
+        request.open('GET', path, true);
+        request.responseType = 'arraybuffer';
+        
+        request.addEventListener('load', function() {
+            that.audioContext.decodeAudioData(this.response, function(buffer) {
+                that.sounds[path] = buffer;
+                
+                // if we are here, then the loading was successful
+                ++that.successCount;
+                if (that.isDone()) {
+                    callback();
+                }
+            }); // end decodeAudioData
+        }, false); // end addEventListener
+        
+        // send the XMLHttpRequest
+        request.send();
+        
     }, this);
 }
 
@@ -83,8 +104,18 @@ AssetManager.prototype.getAsset = function(path) {
     return this.cache[path];
 }
 
-AssetManager.prototype.getSound = function(path) {
-    return this.sounds[path];
+// plays the requested sound; OPTIONAL argument of repeat (default value is true)
+// returns the source for future reference
+AssetManager.prototype.playSound = function(path, repeat) {
+    // if the context is defined and the buffer exists
+    if (this.audioContext && this.sounds[path]) {
+        var source = this.audioContext.createBufferSource();
+        source.buffer = this.sounds[path]; // set the buffer
+        source.loop = typeof repeat === 'undefined' ? true : repeat;
+        source.connect(this.audioContext.destination);
+        source.noteOn(0); // play immediately
+        return source;
+    }
 }
 
 AssetManager.prototype.isDone = function() {
@@ -117,6 +148,7 @@ Entity.prototype.draw = function() {
 
 Entity.prototype.update = function() {
 }
+
 // AnimatedEntity class for ogres, skeletons, etc
 function AnimatedEntity(game, x, y, width, height) {
     Entity.call(this, game, x, y);
@@ -127,8 +159,13 @@ function AnimatedEntity(game, x, y, width, height) {
     // default values for the scaling
     this.scaleToX = 32;
     this.scaleToY = 32;
-    
     this.lastUpdateTime = null;
+    // keep track of the sound that the entity is emitting
+    this.sound = {
+        name: null,
+        isPlaying: false,
+        source: null
+    };
     this.VELOCITY = 0; // in pixels per second (if applicable)
 }
 
@@ -146,6 +183,29 @@ AnimatedEntity.prototype.draw = function(offsetX, offsetY) {
 }
 
 AnimatedEntity.prototype.update = function() {
+}
+
+AnimatedEntity.prototype.emitSound = function(soundName) {
+    if (!this.sound.isPlaying) {
+        // playing for the very first time
+        this.sound.name = soundName;
+        this.sound.source = ASSET_MANAGER.playSound(soundName);
+        this.sound.isPlaying = true;
+    } else if (this.sound.isPlaying && this.sound.name !== soundName) {
+        this.sound.source.noteOff(0); // stop playing the current sound
+        this.sound.name = soundName;
+        this.sound.source = ASSET_MANAGER.playSound(soundName);
+        this.sound.isPlaying = true;
+    }
+}
+
+AnimatedEntity.prototype.stopSound = function() {
+    if(this.sound.source && this.sound.isPlaying) {
+        this.sound.source.noteOff(0); // stop immediately
+        this.sound.source = null;
+        this.sound.name = null;
+        this.sound.isPlaying = false;
+    }
 }
 
 AnimatedEntity.prototype.getDeltaPosition = function() {
@@ -423,6 +483,21 @@ Hero.prototype.draw = function() {
     AnimatedEntity.prototype.draw.call(this, this.offsetX - this.width, this.offsetY);
 }
 
+// override
+Hero.prototype.emitSound = function(soundName) {
+    if (!this.sound.isPlaying) {
+        // playing for the very first time
+        this.sound.name = soundName;
+        this.sound.source = ASSET_MANAGER.playSound(soundName);
+        this.sound.isPlaying = true;
+    } else if (this.sound.isPlaying && this.sound.name !== soundName) {
+        this.sound.source.noteOff(0); // stop playing the current sound
+        this.sound.name = soundName;
+        this.sound.source = ASSET_MANAGER.playSound(soundName);
+        this.sound.isPlaying = true;
+    }
+}
+
 Hero.prototype.update = function() {
     if(this.health <= 0) {
         this.alive = false;
@@ -444,21 +519,25 @@ Hero.prototype.update = function() {
             this.y -= this.isPathClear(this.x, this.y - delta, true) ? delta : 0;
             this.offsetY = baseOffsetY;
             this.direction = 'up';
+            this.emitSound('sounds/walking.wav');
             break;
         case 40: // down
             this.y += this.isPathClear(this.x, this.y + delta, true) ? delta : 0;
             this.offsetY = baseOffsetY + this.height * 2;
             this.direction = 'down';
+            this.emitSound('sounds/walking.wav');
             break;
         case 37: // left
             this.x -= this.isPathClear(this.x - delta, this.y, true) ? delta : 0;
             this.offsetY = baseOffsetY + this.height;
             this.direction = 'left';
+            this.emitSound('sounds/walking.wav');
             break;
         case 39: // right
             this.x += this.isPathClear(this.x + delta, this.y, true) ? delta : 0;
             this.offsetY = baseOffsetY + this.height*3;
             this.direction = 'right';
+            this.emitSound('sounds/walking.wav');
             break;         
         case 32: // space (to punch)
             // prevent a bug where pressing the space bar triggers a tremendous offset (since it gets invoked twice)
@@ -470,6 +549,7 @@ Hero.prototype.update = function() {
         default:
             this.game.key = null;
             this.game.previousKey = null;
+            this.stopSound();
     }
     
     if(!this.game.key && this.animation && this.direction !== 'punch') { // hero is currently animated, but no key is pressed => end animation
@@ -1182,6 +1262,7 @@ GameEngine.prototype.start = function() {
                 }
             }, that);
         }
+        
         that.now = time;
         that.loop();
         requestAnimationFrame(gameLoop, that.ctx); // ctx as 2nd argument so that we don't reanimate while ctx is out of view
@@ -1244,7 +1325,6 @@ window.addEventListener('load', function() {
     canvas.height = document.height;*/
     
     game = new GameEngine(canvas.getContext('2d'));
-
     var lCanv = game.getLoadingScreen();
     
     // display the loading screen while we load assets
@@ -1270,14 +1350,16 @@ window.addEventListener('load', function() {
     }
     
     // Download sounds
-    ASSET_MANAGER.queueSound('song.mp3');
+    ASSET_MANAGER.queueSound('sounds/levelUp.wav');
+    ASSET_MANAGER.queueSound('sounds/monster.wav');
+    ASSET_MANAGER.queueSound('sounds/shine.wav');
+    ASSET_MANAGER.queueSound('sounds/walking.wav');
     
-    ASSET_MANAGER.downloadAll(function() {
+    ASSET_MANAGER.downloadAll(game, function() {
         console.log('All assets have been loaded succesfully.');
-        // these two should be the only two statements here
         game.init();
         game.start();
         game.msgLog.log('Welcome to Roguelike!');
-       // ASSET_MANAGER.getSound('song.mp3').play();
+        $('#options').fadeIn(); // show the options after the loading of the assets is done
     });
 }, false);
