@@ -39,6 +39,11 @@ html {
 	font-size: 1em;
 }
 
+/* Do we even need a message log?*/
+#options button#messages {
+	display: none !important;
+}
+
 #statsDialog p {
 	color: yellow;
 }
