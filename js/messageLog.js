@@ -2,9 +2,12 @@
  * To display events
  */
 
-function MessageLog() {
+function MessageLog(voice, language) {
     this.init();
     this.dialog = null;
+    this.voice = voice;
+    this.language = language;
+    console.log('Initializing MessageLog with: ' + voice + ', ' + language);
 }
 
 MessageLog.prototype.init = function() {
@@ -46,5 +49,6 @@ MessageLog.prototype.getCurrentTime = function() {
 }
 
 MessageLog.prototype.log = function(msg) {
+    myAudio.say(this.voice, this.language, msg);
     this.$dialog.prepend('<p>' + this.getCurrentTime() + ' ' + msg + '</p>');
 }

@@ -59,11 +59,11 @@ Inventory.prototype.setBackgroundImage = function(type) {
     switch (type) {
         case 'blue_gem':
             src += 'blue_gem.png';
-            tooltip = 'increase strength by 1';
+            tooltip = 'increases experience by 10';
             break;
         case 'green_gem':
             src += 'green_gem.png';
-            tooltip = 'increase strength by 1';
+            tooltip = 'increases strength by 1';
             break;
         case 'pink_gem':
             src += 'pink_gem.png';
@@ -71,7 +71,7 @@ Inventory.prototype.setBackgroundImage = function(type) {
             break;
         case 'red_gem':
             src += 'red_gem.png';
-            tooltip = 'increase strength by 1';
+            tooltip = 'increases health by 10';
             break;
         case 'yellow_gem':
             src += 'yellow_gem.png';
@@ -126,9 +126,16 @@ Inventory.prototype.useItem = function(itemID) {
 }
 
 Inventory.prototype.init = function() {   
+    var $inventoryButton = $('#inventory'),
+        that = this;
+        
     // initialize dialog
     $('#inventoryDialog').dialog({
         autoOpen: false,
+        close: function(event, ui) {
+            // stop the audio right after close to prevent 'double speech' bug
+            myAudio.stop();
+        },
         position: {
             my: 'right top',
             at: 'right top',
@@ -141,10 +148,10 @@ Inventory.prototype.init = function() {
     });
     
     // display on click
-    $('#inventory').button().click(function() {
+    $inventoryButton.button().click(function() {
         var $dialog = $('#inventoryDialog'),
             command = "";
-        
+            
         command = $dialog.dialog('isOpen') ? 'close' : 'open';
         $dialog.dialog(command);
     });
@@ -153,9 +160,14 @@ Inventory.prototype.init = function() {
     this.$dialog = $('#inventoryDialog');
     
     // allow the user to use the item on click
-    var that = this;
-    this.$dialog.on('click', 'div', function() {
+    this.$dialog.on('click', 'div', function(e) {
         var index = that.getItemIndexByType($(this).attr('id'));
         that.useItem(index);
+        e.preventDefault();
+    });
+    
+    // text to speech for the text on the button
+    $inventoryButton.focus(function() {
+        myAudio.say(that.game.voice, that.game.language, $(this).text());
     });
 }

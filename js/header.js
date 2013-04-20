@@ -561,7 +561,8 @@ Hero.prototype.update = function() {
         punchOffset = 514;
         
     switch(this.game.key) {
-        case 38: // up
+        case 38: // up arrow
+        case 87: // 'W'
             if (this.isPathClear(this.x, this.y - delta, true)) {
                 this.y -= delta;
                 this.emitSound('sounds/walking.wav');
@@ -572,7 +573,8 @@ Hero.prototype.update = function() {
             this.offsetY = baseOffsetY;
             this.direction = 'up';
             break;
-        case 40: // down
+        case 40: // down arrow
+        case 83: // 'S'
             if (this.isPathClear(this.x, this.y + delta, true)) {
                 this.y += delta;
                 this.emitSound('sounds/walking.wav');
@@ -584,6 +586,7 @@ Hero.prototype.update = function() {
             this.direction = 'down';
             break;
         case 37: // left
+        case 65: // 'A'
             if (this.isPathClear(this.x - delta, this.y, true)) {
                 this.x -= delta;
                 this.emitSound('sounds/walking.wav');
@@ -595,6 +598,7 @@ Hero.prototype.update = function() {
             this.direction = 'left';
             break;
         case 39: // right
+        case 68: // 'D'
             if (this.isPathClear(this.x + delta, this.y, true)) {
                 this.x += delta;
                 this.emitSound('sounds/walking.wav');
@@ -1046,7 +1050,7 @@ Gem.prototype.pickUp = function() {
     // will hold a function to the effect
     var  activateEffect = null;
         
-    this.game.msgLog.log('Picked up a ' + this.color + ' gem!');
+    this.game.msgLog.log('You picked up a ' + this.color + ' gem!');
     this.emitSound('sounds/itemGain.mp3', false); 
     
     // determine the gem's effect based on its color
@@ -1249,9 +1253,11 @@ function GameEngine(ctx) {
     this.previousKey = null; // keep track of previously pressed key to avoid "sticky" keys
     this.dungeon = null;
     this.hero = null; // keep track of the hero for path planning purposes
-    this.msgLog = new MessageLog();
+    this.voice = 'child';
+    this.language = 'en';
+    this.msgLog = new MessageLog(this.voice, this.language);
     this.ENEMY_PROBABILITY = 2e-2; // 3e-2
-    this.MISC_PROBABILITY = 1e-3; // 5e-3
+    this.MISC_PROBABILITY = 0; // 5e-3
     this.GEM_COLORS = ['blue', 'green', 'red'];
 }
 
@@ -1332,7 +1338,7 @@ GameEngine.prototype.init = function() {
     // let's start tracking input
     this.trackEvents();
     // position buttons for stats, inventory, and options
-    this.positionGameButtons();
+    this.initGameButtons();
 }
 
 GameEngine.prototype.start = function() {
@@ -1356,12 +1362,27 @@ GameEngine.prototype.start = function() {
     })(); // let's make it call itself and get the ball rolling...
 }
 
+// returns whether the key pressed is a key used in the game
+GameEngine.prototype.isGameKey = function(key) {
+    if (key >= 37 && key <= 40 || key === 32 ||
+        key === 87 || key === 65 || key === 83 || key === 68) {
+            return true;
+    }
+    
+    return false;
+}
+
 GameEngine.prototype.trackEvents = function() {
     var that = this;
     window.addEventListener('keydown', function(e) {
         that.previousKey = that.key;
         that.key = e.keyCode || e.which;
-        e.preventDefault();
+        
+        // if it is a game key, prevent default
+        if (that.isGameKey(that.key)) {
+            e.preventDefault();
+        }
+        
     }, false);
     
     window.addEventListener('keyup', function(e) {
@@ -1387,9 +1408,10 @@ GameEngine.prototype.getLoadingScreen = function() {
     return canv; // return the canvas
 }
 
-GameEngine.prototype.positionGameButtons = function() {
+GameEngine.prototype.initGameButtons = function() {
     var $div = $('#options'),
         $canvas = $('#canvas'),
+        that = this,
         xOffset = -40,
         yOffset = -(this.dungeon.tileSize*2 - $div.height())/2; // center the buttons vertically
 
@@ -1398,11 +1420,13 @@ GameEngine.prototype.positionGameButtons = function() {
         left: $canvas.offset().left + $canvas.width() - $div.width() + xOffset,
         top: $canvas.offset().top + $canvas.height() - $div.height() + yOffset,
     });
+    
 }
 
 var ASSET_MANAGER = new AssetManager(), 
     canvas,
-    game;
+    game,
+    $prevDialog = null; // for the options' dialog
     
 window.addEventListener('load', function() {
 
@@ -1445,6 +1469,12 @@ window.addEventListener('load', function() {
     ASSET_MANAGER.queueSound('sounds/punch.wav');
     ASSET_MANAGER.queueSound('sounds/shine.wav');
     ASSET_MANAGER.queueSound('sounds/walking.wav');
+    
+    // initialize myAudio object for text to speech use
+    myAudio.initialize();
+    // let the user know we are loading assets
+    myAudio.say(game.voice, game.language, 'Loading, please wait');
+    
     
     ASSET_MANAGER.downloadAll(game, function() {
         console.log('All assets have been loaded succesfully.');

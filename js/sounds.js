@@ -1,5 +1,6 @@
 /*
  * Testing out webkitAudioContext
+ * DON'T INCLUDE IN PROJECT
  */
 
 var context;
@@ -26,7 +27,6 @@ window.addEventListener('load', function() {
         source.loop = true;
         source.connect(panner);
         source.noteOn(0);
-        //context.listener.setPosition(-100, 0, 0);
         panner.setPosition(0, 0, 0);
     });
 }, false);
