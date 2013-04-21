@@ -444,6 +444,7 @@ function Hero(game, x, y, width, height) {
     this.health = 100;
     this.strength = 1;
     this.warnedLowHealth = false;
+    this.warnedVeryLowHealth = false;
     // how much the hero damages the opponent
     this.VELOCITY = 100;
     this.ATTACKING_RANGE = 10;
@@ -570,12 +571,21 @@ Hero.prototype.update = function() {
         // game is over
         gameOver = true;
         return;
+    } else if (this.health <= 10 && !this.warnedVeryLowHealth) {
+        // very low health
+        this.game.msgLog.log('Warning, very low health');
+        this.warnedVeryLowHealth = true;
+        
     } else if (this.health <= 30 && !this.warnedLowHealth) {
         // warn the player about low health
         this.game.msgLog.log('Warning, low health');
         this.warnedLowHealth = true;
-    } else if (this.health > 30) {
+        
+    }  else if (this.health > 30) {
         this.warnedLowHealth = false;
+        
+    } else if (this.health > 10) {
+        this.warnedVeryLowHealth = false;
     }
 
     var delta = this.game.now ? this.getDeltaPosition() : 0, baseOffsetY = 518, punchOffset = 514;

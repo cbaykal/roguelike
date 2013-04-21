@@ -67,12 +67,7 @@ RandomizeDungeon.prototype.initMap = function() {
 
 // simplify map and make it aesthetically pleasing: 
 // remove any 'lonely' pieces of wall and connect any possible corridors
-RandomizeDungeon.prototype.simplifyMap = function(map) {
-    // first remove walls with 3 neighbors empty
-    this.removeAllLonelyWalls(3);
-    // then remove any remaining completely lonely walls (4 neighbors empty)
-    this.removeAllLonelyWalls(4);
-    
+RandomizeDungeon.prototype.simplifyMap = function(map) {  
     // now connect any paths
     for (var i = 0; i < this.map.length; ++i) {
         for (var j = 0; j < this.map[i].length; ++j) {
@@ -81,6 +76,11 @@ RandomizeDungeon.prototype.simplifyMap = function(map) {
             }
         }
     }
+    
+    // first remove walls with 3 neighbors empty
+    this.removeAllLonelyWalls(3);
+    // then remove any remaining completely lonely walls (4 neighbors empty)
+    this.removeAllLonelyWalls(4);
     
     return this.map;
 }
@@ -129,10 +129,11 @@ RandomizeDungeon.prototype.connectCorridor = function(x, y) {
         // get the coordinates of the neighbors 2 tiles away
         var nCoords = this.getNeighborCoords(neighbors[k], vertex, 1),
             nnCoords = this.getNeighborCoords(neighbors[k], vertex, 2); // neighbor of neighbor
-            
+        
+        // if it is a valid vertex OR if it is not considered to be valid because it is a boundary, then proceed
         if (this.isValidVertex(nCoords.x, nCoords.y) && this.isValidVertex(nnCoords.x, nnCoords.y) &&
             this.map[nCoords.x][nCoords.y].type === 'F' && this.map[nnCoords.x][nnCoords.y].type === 'W') {
-            
+
             // make the free space in between the two walls a wall to connect them
             this.map[nCoords.x][nCoords.y].type = 'W';
             --this.numFreeSpace;
@@ -163,10 +164,11 @@ RandomizeDungeon.prototype.generateDungeon = function(exitX, exitY, goalX, goalY
     // run our randomized depth first algorithm to create the map
     this.depthFirst(this.map[exitX][exitY]);
     
+    // find a path to the goal with the map's current state
     var pathFinder = new PathFinder(this.game, 
-                                   new Goal(this, this.game, goalX*this.game.dungeon.tileSize, goalY*this.game.dungeon.tileSize),
-                                   new Goal(this, this.game, exitX*this.game.dungeon.tileSize, exitY*this.game.dungeon.tileSize)),
-        path = pathFinder.findPath();
+                                    new Goal(this, this.game, goalX*this.game.dungeon.tileSize, goalY*this.game.dungeon.tileSize),
+                                    new Goal(this, this.game, exitX*this.game.dungeon.tileSize, exitY*this.game.dungeon.tileSize)),
+    path = pathFinder.findPath();
     
     // simplify the map
     this.simplifyMap(this.map);
@@ -182,6 +184,17 @@ RandomizeDungeon.prototype.generateDungeon = function(exitX, exitY, goalX, goalY
     }
 
     return this.generateDungeon(exitX, exitY, goalX, goalY);
+}
+
+// returns whether the points are on the game's boundary
+RandomizeDungeon.prototype.isGameBoundary = function(x, y) {
+    
+    if (0 <= x && x < this.width && y === 0) {
+        console.log('here');
+    }
+    return ((x === 0 || x === this.width - 1)  && (0 <= y && y < this.height)) || // left and right sides
+           ((0 <= x && x < this.width) && (y === 0 || (this.height - 3 <= y && y <= this.height - 1))); // top and bottom
+               
 }
 
 // returns whether the given coordinates is within bounds
@@ -217,16 +230,17 @@ RandomizeDungeon.prototype.widenPath = function(vertex, dOne, dTwo) {
     
     // boundary cases: what if the wall is valid but
     // it is right next to the game boundary?
-    if (this.isValidVertex(nOne.x, nOne.y) && this.isValidVertex(nTwo.x, nTwo.y)) {
+    if ((this.isValidVertex(nOne.x, nOne.y) || this.isGameBoundary(nOne.x, nOne.y)) &&
+        (this.isValidVertex(nTwo.x, nTwo.y) || this.isGameBoundary(nTwo.x, nTwo.y))) {
+            
         vOne = this.map[nOne.x][nOne.y];
-        vTwo = this.map[nTwo.x][nOne.y];
-        console.log('here');
+        vTwo = this.map[nTwo.x][nTwo.y];
+
         // if they are both walls, change that
         if (vOne.type === 'W' && vTwo.type === 'W') {
-            console.log('widening path');
-            // make them both empty spaces
-            vOne.type = 'F';
-            vTwo.type = 'F';
+            // if it is a game boundary, don't make it a wall
+            vOne.type = this.isGameBoundary(nOne.x, nOne.y) ? 'W' : 'F';
+            vTwo.type = this.isGameBoundary(nTwo.x, nTwo.y) ? 'W' : 'F';
             this.numFreeSpace += 2;
         }
     }
