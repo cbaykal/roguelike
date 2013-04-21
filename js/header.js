@@ -558,6 +558,7 @@ Hero.prototype.emitSound = function(soundName) {
         this.sound.isPlaying = true;
     }
 }
+
 // override
 Hero.prototype.stopSound = function() {
     if (this.sound.source && this.sound.isPlaying) {
@@ -566,6 +567,22 @@ Hero.prototype.stopSound = function() {
         this.sound.source = null;
         this.sound.name = null;
         this.sound.isPlaying = false;
+    }
+}
+
+// are we at the goal?
+Hero.prototype.isAtGoal = function() {
+    var goalStartX = this.game.dungeon.goalX*this.game.dungeon.tileSize - this.game.dungeon.tileSize,
+        goalStartY = this.game.dungeon.goalY*this.game.dungeon.tileSize,
+        goalEndX = goalStartX + this.game.dungeon.tileSize,
+        goalEndY = goalStartY + this.game.dungeon.tileSize;
+        
+    var goalRect = new Rectangle(goalStartX, goalEndX, goalStartY, goalEndY);
+        heroRect = new Rectangle(this.game.hero.x, this.game.hero.x + this.game.hero.scaleToX,
+                                  this.game.hero.y, this.game.hero.y + this.game.hero.scaleToY);
+   
+    if (goalRect.isIntersecting(heroRect)) {
+        alert('at goal!');
     }
 }
 
@@ -703,7 +720,8 @@ Hero.prototype.update = function() {
         this.game.audioContext.listener.setPosition(Math.floor(this.x + this.scaleToX/4),
                                                     -Math.floor((this.y + this.scaleToY/4)), 0);
     }
-
+    
+    this.isAtGoal();
     // update info about the hero
     this.stats.update();
     this.lastUpdateTime = this.game.now;
@@ -778,7 +796,7 @@ Enemy.prototype.update = function() {
 
         switch (this.direction) {
             case 'up':
-                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x, this.y - delta, true, false, true)) {
+                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x, this.y - delta, true, true, true)) {
                     this.y -= delta;
                 } else {
                     this.wandering = false;
@@ -787,7 +805,7 @@ Enemy.prototype.update = function() {
                 break;
 
             case 'down':
-                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x, this.y + delta, true, false, true)) {
+                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x, this.y + delta, true, true, true)) {
                     this.y += delta;
                 } else {
                     this.wandering = false;
@@ -796,7 +814,7 @@ Enemy.prototype.update = function() {
                 break;
 
             case 'right':
-                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x + delta, this.y, true, false, true)) {
+                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x + delta, this.y, true, true, true)) {
                     this.x += delta;
                 } else {
                     this.wandering = false;
@@ -805,7 +823,7 @@ Enemy.prototype.update = function() {
                 break;
 
             case 'left':
-                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x - delta, this.y, true, false, true)) {
+                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x - delta, this.y, true, true, true)) {
                     this.x -= delta;
                 } else {
                     this.wandering = false;
@@ -839,7 +857,6 @@ Enemy.prototype.update = function() {
     } else {
         this.stopSound();
     }
-
     this.lastUpdateTime = this.game.now;
 }
 
@@ -847,7 +864,7 @@ Enemy.prototype.update = function() {
 Enemy.prototype.getDirection = function() {
     var direction = this.direction;
 
-    if (!this.isPathClear(this.x, this.y, false, true, false)) {
+    if (!this.isPathClear(this.x, this.y, true, true, false)) {
         return direction;
     }
     // I found that the most robust implementation of reconstructing the path
@@ -859,6 +876,7 @@ Enemy.prototype.getDirection = function() {
     if (!this.path || !this.pathLastUpdated || (this.game.now - this.pathLastUpdated) >= timerDelta) {
         var planner = new PathFinder(this.game, this.game.hero, this),
             foundPath = planner.findPath();
+        console.log('forcing path find');
         // update the path if there were no errors in finding it
         this.path = (foundPath || !this.path) ? foundPath : this.path;
         this.pathLastUpdated = this.game.now;
@@ -911,7 +929,9 @@ Enemy.prototype.getRandomGemColor = function() {
 }
 // are we at the goal position determined by the path planner?
 Enemy.prototype.isAtGoalPosition = function() {
-    var enemyRect = new Rectangle(this.x, this.x + this.scaleToX, this.y, this.y + this.scaleToY), heroRect = new Rectangle(this.game.hero.x, this.game.hero.x + this.game.hero.scaleToX, this.game.hero.y, this.game.hero.y + this.game.hero.scaleToY);
+    var enemyRect = new Rectangle(this.x, this.x + this.scaleToX, this.y, this.y + this.scaleToY),
+         heroRect = new Rectangle(this.game.hero.x, this.game.hero.x + this.game.hero.scaleToX,
+                                  this.game.hero.y, this.game.hero.y + this.game.hero.scaleToY);
 
     if (enemyRect.isIntersecting(heroRect) || (this.x <= this.goalX && this.x + this.scaleToX >= this.goalX) && (this.y <= this.goalY && this.y + this.scaleToY >= this.goalY)) {
         return true;
@@ -963,8 +983,8 @@ function Ogre(game, x, y, width, height) {
     // 32
     this.scaleToY = 24;
     // 38
-    this.VELOCITY = 30;
-    this.DISTANCE_THRESHOLD = 100; // if the hero is within this distance, attack him
+    this.VELOCITY = 35;
+    this.DISTANCE_THRESHOLD = 150; // if the hero is within this distance, attack him
     this.SOUND_DIST_THRESHOLD = 200;
 }
 
@@ -985,8 +1005,8 @@ function Skeleton(game, x, y, width, height) {
     this.baseOffsetY = 13;
     this.scaleToX = 24;
     this.scaleToY = 24;
-    this.VELOCITY = 30;
-    this.DISTANCE_THRESHOLD = 100;
+    this.VELOCITY = 3;
+    this.DISTANCE_THRESHOLD = 150;
     this.SOUND_DIST_THRESHOLD = 200;
 }
 
@@ -1151,18 +1171,20 @@ function Dungeon(game, enemyProbability, miscProbability) {
 // use a two dimensional array to keep track of the initial objects and entities in the dungeon
 Dungeon.prototype.generateDungeon = function() {
     var numTilesX = Math.ceil(this.game.frameWidth / this.tileSize),
-        numTilesY = Math.ceil(this.game.frameHeight / this.tileSize),
-        goalTileX = numTilesX - 2,
-        goalTileY = 0;
+        numTilesY = Math.ceil(this.game.frameHeight / this.tileSize);
+        
+    // set the goal to be the top right corner
+    this.goalTileX = numTilesX - 2;
+    this.goalTileY = 0;
     
     // generate a completely randomized dungeon
     var dCreator = new RandomizeDungeon(this.game, numTilesX, numTilesY);
-    this.map = dCreator.generateDungeon(goalTileX, goalTileY, 
+    this.map = dCreator.generateDungeon(this.goalTileX, this.goalTileY, 
                                Math.floor(this.game.HERO_STARTX/this.tileSize),
                                Math.floor(this.game.HERO_STARTY/this.tileSize));
   //  console.log('map done');
     // also make the tile to the left of the goal tile a free space
-    this.map[goalTileX - 1][goalTileY].type = 'F';
+    this.map[this.goalTileX - 1][this.goalTileY].type = 'F';
     
     // after we generate this map, we have to make sure that there are no walls/enemies near the hero's start point
     this.markHeroTerritory(numTilesX, numTilesY);

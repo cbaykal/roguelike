@@ -113,6 +113,19 @@ PathFinder.prototype.isGoalNode = function(nodeObject) {
     return nodeObject.node.x === this.goalNode.x && nodeObject.node.y === this.goalNode.y;
 }
 
+
+PathFinder.prototype.isNearGoal = function(x, y) {
+    if (this.areNodesEqual(this.goalNode, new Node(x, y)) ||
+        this.areNodesEqual(this.goalNode, new Node(x - 1, y)) ||
+        this.areNodesEqual(this.goalNode, new Node(x + 1, y)) ||
+        this.areNodesEqual(this.goalNode, new Node(x, y - 1)) ||
+        this.areNodesEqual(this.goalNode, new Node(x, y + 1))) {
+        return true;
+    }
+    
+    return false;
+}
+
 // need to pay careful attention here because we don't want 
 // nodes that are walls/entities, etc
 PathFinder.prototype.getNeighboringNodes = function(node) {
@@ -122,9 +135,14 @@ PathFinder.prototype.getNeighboringNodes = function(node) {
     directions.forEach(function(direction) {
         var newX = node.x + direction[0],
             newY = node.y + direction[1];
-
+            
         // check to see whether the path is clear
-       if(this.goal.isPathClear(newX*this.game.dungeon.tileSize, newY*this.game.dungeon.tileSize, false, false, false)) {
+       if(this.goal.isPathClear(newX*this.game.dungeon.tileSize, newY*this.game.dungeon.tileSize, false, false, false) ||
+            this.isNearGoal(newX, newY)) {
+                
+            if (this.isNearGoal(newX, newY)) {
+                //console.log('new method WORKED!!');
+            }
             var newNode = new Node(newX, newY, node, node.g + this.MOVEMENT_COST);
             newNode.setHAndUpdateF(this.getH(newNode));
             // add it to the neighbors array
@@ -183,13 +201,12 @@ PathFinder.prototype.findPath = function() {
     // whether it is the goal node, if it is then we are done
     while (!this.isGoalNode( (bestNode = this.getBestNode()))) {
         //console.log(this.open);
-        if(typeof bestNode.node === 'undefined') {
+        if (typeof bestNode.node === 'undefined') {
             // there was an error...
             success = false;
             break;
         }
-        
-        ++numNodesConsidered;
+
         // remove the node in question from the open array
         this.open.splice(bestNode.index, 1); // this is where using the node's index comes into play
         // add it to the closed array
