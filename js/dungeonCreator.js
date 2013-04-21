@@ -28,8 +28,7 @@ Goal.prototype.isPathClear = function(x, y) {
     if (this.randDungeon.isValidVertex(x, y) && this.randDungeon.map[x][y].type === 'F') {
         return true;
     }
-    
-    console.log('returning false');
+
     return false;
 }
 
@@ -44,8 +43,8 @@ function RandomizeDungeon(game, width, height) {
     this.visitedGoal = false; // we have not yet visited the goal vertex
     this.TOTAL_TILES = width*height;
     this.THRESHOLD_NEIGHBORS_EMPTY = 3; // used for simplifying the map 
-    this.MIN_WALL_NUM = Math.round(this.TOTAL_TILES*(1/2));
-    this.MAX_WALL_NUM = Math.round(this.TOTAL_TILES*(3/4));
+    this.MIN_WALL_NUM = Math.round(this.TOTAL_TILES*(1/4));
+    this.MAX_WALL_NUM = Math.round(this.TOTAL_TILES*(1/2));
 }
 
 // initialize the map with walls
@@ -65,8 +64,7 @@ RandomizeDungeon.prototype.initMap = function() {
     this.numFreeSpace = 0;
 }
 
-// simplify map and make it aesthetically pleasing: 
-// remove any 'lonely' pieces of wall and connect any possible corridors
+// make the map more connected
 RandomizeDungeon.prototype.simplifyMap = function(map) {  
     // now connect any paths
     for (var i = 0; i < this.map.length; ++i) {
@@ -77,24 +75,28 @@ RandomizeDungeon.prototype.simplifyMap = function(map) {
         }
     }
     
-    // first remove walls with 3 neighbors empty
-    this.removeAllLonelyWalls(3);
-    // then remove any remaining completely lonely walls (4 neighbors empty)
-    this.removeAllLonelyWalls(4);
-    
     return this.map;
 }
 
 RandomizeDungeon.prototype.removeAllLonelyWalls = function(threshold) {
     this.numFreeSpace = 0;
+    var failure = false,
+        result = false;
+    
     for (var i = 0; i < this.map.length; ++i) {
         for (var j = 0; j < this.map[i].length; ++j) {
             if (this.map[i][j].type === 'W') {
-                this.removeLonelyWall(i, j, threshold);
+                var result = this.removeLonelyWall(i, j, threshold);
+                failure = !failure ? result: failure;
             } else {
                 ++this.numFreeSpace;
             }
         }
+    }
+    
+    // to make sure we remove all lonely walls, recursively call function
+    if (failure) {
+        return this.removeAllLonelyWalls(threshold);
     }
 }
 
@@ -102,7 +104,8 @@ RandomizeDungeon.prototype.removeAllLonelyWalls = function(threshold) {
 RandomizeDungeon.prototype.removeLonelyWall = function(x, y, threshold) {
     var vertex = this.map[x][y],
         neighbors = ['N', 'S', 'W', 'E'],
-        numEmpty = 0; // number of free space around the wall
+        numEmpty = 0, // number of free space around the wall
+        foundLonelyWall = false;
                 
     for (var k = 0; k < neighbors.length; ++k) {
         var nCoords = this.getNeighborCoords(neighbors[k], vertex);
@@ -115,10 +118,14 @@ RandomizeDungeon.prototype.removeLonelyWall = function(x, y, threshold) {
     
     // finally, if the number of spaces was above threshold, remove the wall
     if (numEmpty >= threshold) {
+        foundLonelyWall = true;
         // make it free space instead of a wall
         this.map[x][y].type = 'F';
         ++this.numFreeSpace;
     }
+    
+    // return whether a lonely wall was found (sign of a defective map)
+    return foundLonelyWall;
 }
 
 RandomizeDungeon.prototype.connectCorridor = function(x, y) {
@@ -164,18 +171,19 @@ RandomizeDungeon.prototype.generateDungeon = function(exitX, exitY, goalX, goalY
     // run our randomized depth first algorithm to create the map
     this.depthFirst(this.map[exitX][exitY]);
     
-    // find a path to the goal with the map's current state
     var pathFinder = new PathFinder(this.game, 
                                     new Goal(this, this.game, goalX*this.game.dungeon.tileSize, goalY*this.game.dungeon.tileSize),
                                     new Goal(this, this.game, exitX*this.game.dungeon.tileSize, exitY*this.game.dungeon.tileSize)),
-    path = pathFinder.findPath();
+        path = pathFinder.findPath();
     
-    // simplify the map
+    // connect any 'close' points
     this.simplifyMap(this.map);
     
     // clear the hero's path to the goal to ensure that it is reachable
     if (path) {
         this.clearPath(path);
+        // recursively remove all lonely walls to make the map more aesthetically pleasing
+        this.removeAllLonelyWalls(3);
     }
 
     // if the map and path are good to go, then return the map, else repeat the process all over
@@ -188,10 +196,6 @@ RandomizeDungeon.prototype.generateDungeon = function(exitX, exitY, goalX, goalY
 
 // returns whether the points are on the game's boundary
 RandomizeDungeon.prototype.isGameBoundary = function(x, y) {
-    
-    if (0 <= x && x < this.width && y === 0) {
-        console.log('here');
-    }
     return ((x === 0 || x === this.width - 1)  && (0 <= y && y < this.height)) || // left and right sides
            ((0 <= x && x < this.width) && (y === 0 || (this.height - 3 <= y && y <= this.height - 1))); // top and bottom
                
@@ -209,16 +213,13 @@ RandomizeDungeon.prototype.clearPath = function(path) {
     path.forEach(function(node, index) {
         var vertex = this.map[node.x][node.y];
         vertex.type = 'F';
-        
-        // widen north and south if necessary
-        this.widenPath(vertex, 'N', 'S');
-        // widen west and east if necessary
-        this.widenPath(vertex, 'W', 'E');
+        // make the vertices around the original vertex empty space if applicable
+        this.clearSurroundings(vertex);
        
     }, this);
 }
 
-RandomizeDungeon.prototype.widenPath = function(vertex, dOne, dTwo) {
+/*RandomizeDungeon.prototype.widenPath = function(vertex, dOne, dTwo) {
     var nOne = null,
         nTwo = null,
         vOne = null,
@@ -241,7 +242,25 @@ RandomizeDungeon.prototype.widenPath = function(vertex, dOne, dTwo) {
             // if it is a game boundary, don't make it a wall
             vOne.type = this.isGameBoundary(nOne.x, nOne.y) ? 'W' : 'F';
             vTwo.type = this.isGameBoundary(nTwo.x, nTwo.y) ? 'W' : 'F';
-            this.numFreeSpace += 2;
+            this.numFreeSpace += 2; // *CHANGE*
+       }
+    }
+}*/
+
+RandomizeDungeon.prototype.clearSurroundings = function(vertex) {
+    var neighbors = ['N', 'S', 'W', 'E'],
+        nCoords = null,
+        neighbor = null;
+        
+    for (var i = 0; i < neighbors.length; ++i) {
+        // get the neighbor coordinates
+        nCoords = this.getNeighborCoords(neighbors[i], vertex);
+        
+        // if it is a valid vertex and not a game coordinate
+        if (this.isValidVertex(nCoords.x, nCoords.y) && !this.isGameBoundary(nCoords.x, nCoords.y)) {
+            // make it free space
+            this.map[nCoords.x][nCoords.y].type = 'F';
+            ++this.numFreeSpace;
         }
     }
 }
