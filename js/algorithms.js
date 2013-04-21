@@ -122,9 +122,9 @@ PathFinder.prototype.getNeighboringNodes = function(node) {
     directions.forEach(function(direction) {
         var newX = node.x + direction[0],
             newY = node.y + direction[1];
-            
+
         // check to see whether the path is clear
-       if(this.goal.isPathClear(newX*this.game.dungeon.tileSize, newY*this.game.dungeon.tileSize, false, true, false)) {
+       if(this.goal.isPathClear(newX*this.game.dungeon.tileSize, newY*this.game.dungeon.tileSize, false, false, false)) {
             var newNode = new Node(newX, newY, node, node.g + this.MOVEMENT_COST);
             newNode.setHAndUpdateF(this.getH(newNode));
             // add it to the neighbors array

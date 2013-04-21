@@ -197,8 +197,7 @@ function AnimatedEntity(game, x, y, width, height) {
         isPlaying : false,
         source : null
     };
-    this.VELOCITY = 0;
-    // in pixels per second (if applicable)
+    this.VELOCITY = 0;  // in pixels per second (if applicable)
 }
 
 AnimatedEntity.prototype = new Entity();
@@ -256,10 +255,12 @@ AnimatedEntity.prototype.getDeltaPosition = function() {
     return elapsedTime > 200 ? 0 : Math.round(elapsedTime / 1000 * this.VELOCITY);
     // to avoid wormholes
 }
+var count = 0;
 // check the proposed x and y bounds and see whether we can move there
 AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, compareEntities, considerHero) {
 
-    var compareEntities = typeof compareEntities === 'undefined' ? true : compareEntities, considerHero = typeof considerHero === 'undefined' ? true : considerHero;
+    var compareEntities = typeof compareEntities === 'undefined' ? true : compareEntities, 
+        considerHero = typeof considerHero === 'undefined' ? true : considerHero;
 
     // let's check the map array to see whether the new location is free or not
     var adjustedCoords = typeof useAdjustedCoords === "undefined" || useAdjustedCoords ? this.getAdjustedCoords(newX, newY) : {
@@ -268,17 +269,18 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, c
     };
     // gets the corresponding tile number (i and j) for use in retrieval in map
 
-    var tileX = Math.floor(adjustedCoords.x / this.game.dungeon.tileSize), tileY = Math.floor(adjustedCoords.y / this.game.dungeon.tileSize);
+    var tileX = Math.floor(adjustedCoords.x / this.game.dungeon.tileSize),
+        tileY = Math.floor(adjustedCoords.y / this.game.dungeon.tileSize);
 
-    var i = tileX < 0 ? 1 : tileX, j = tileY < 0 ? 1 : tileY;
+    var i = tileX < 0 ? 1 : tileX, 
+        j = tileY < 0 ? 1 : tileY;
 
     if (i < 0 || j < 0 || i > 49 || j > 26) {
         alert('error! \ni: ' + i + '\nj: ' + j);
     }
 
-    if (this.game.dungeon.map[i][j] === 'W') {
-        return false;
-        // there's a wall, so obviously can't move there
+    if (this.game.dungeon.map[i][j].type === 'W') {
+        return false;  // there's a wall, so obviously can't move there
     }
 
     if (!compareEntities) {
@@ -449,6 +451,8 @@ function Hero(game, x, y, width, height) {
     this.VELOCITY = 100;
     this.ATTACKING_RANGE = 10;
     this.RECOVERY_RATE = this.health / 1e4;
+    this.VERY_LOW_HEALTH_WARNING = 20; // warn below this health
+    this.LOW_HEALTH_WARNING = 40; // warn below this health
 }
 
 Hero.prototype = new AnimatedEntity();
@@ -571,20 +575,20 @@ Hero.prototype.update = function() {
         // game is over
         gameOver = true;
         return;
-    } else if (this.health <= 10 && !this.warnedVeryLowHealth) {
+    } else if (this.health <= this.VERY_LOW_HEALTH_WARNING && !this.warnedVeryLowHealth) {
         // very low health
         this.game.msgLog.log('Warning, very low health');
         this.warnedVeryLowHealth = true;
         
-    } else if (this.health <= 30 && !this.warnedLowHealth) {
+    } else if (this.health <= this.LOW_HEALTH_WARNING && !this.warnedLowHealth) {
         // warn the player about low health
         this.game.msgLog.log('Warning, low health');
         this.warnedLowHealth = true;
         
-    }  else if (this.health > 30) {
+    }  else if (this.health > this.LOW_HEALTH_WARNING) {
         this.warnedLowHealth = false;
         
-    } else if (this.health > 10) {
+    } else if (this.health > this.VERY_LOW_HEALTH_WARNING) {
         this.warnedVeryLowHealth = false;
     }
 
@@ -725,13 +729,10 @@ function Enemy(game, x, y, width, height) {
     this.health = 75;
     this.strength = 1e-1;
     this.wandering = false;
-    this.wanderingDelta = 0;
-    // keep track of how much it has wandered
+    this.wanderingDelta = 0;  // keep track of how much it has wandered
     this.VELOCITY = 400;
-    this.DISTANCE_THRESHOLD = 0;
-    // if the hero is within this distance, attack him
-    this.WANDER_PROBABILITY = 5e-3;
-    // 5e-3
+    this.DISTANCE_THRESHOLD = 0; // if the hero is within this distance, attack him
+    this.WANDER_PROBABILITY = 5e-3; // 5e-3
     this.ATTACKING_RANGE = 10;
     this.TIMER_DELTA_CONSTANT = 10;
     // for determining the interval to update the path planner
@@ -831,7 +832,7 @@ Enemy.prototype.update = function() {
         this.animation = null;
     }
 
-    if (this.canAttackHero()) {
+    if (this.distanceToHero() <= this.SOUND_DIST_THRESHOLD) {
         // emit the monster groaning sound
         this.emitSound('sounds/monster.wav');
     } else {
@@ -840,6 +841,7 @@ Enemy.prototype.update = function() {
 
     this.lastUpdateTime = this.game.now;
 }
+
 // get the direction to move based on A* path planning
 Enemy.prototype.getDirection = function() {
     var direction = this.direction;
@@ -854,8 +856,8 @@ Enemy.prototype.getDirection = function() {
 
     // if there is no path at hand, or we need to update our path...
     if (!this.path || !this.pathLastUpdated || (this.game.now - this.pathLastUpdated) >= timerDelta) {
-        var planner = new PathFinder(this.game, this.game.hero, this), foundPath = planner.findPath();
-
+        var planner = new PathFinder(this.game, this.game.hero, this),
+            foundPath = planner.findPath();
         // update the path if there were no errors in finding it
         this.path = (foundPath || !this.path) ? foundPath : this.path;
         this.pathLastUpdated = this.game.now;
@@ -961,7 +963,8 @@ function Ogre(game, x, y, width, height) {
     this.scaleToY = 24;
     // 38
     this.VELOCITY = 30;
-    this.DISTANCE_THRESHOLD = 150; // if the hero is within this distance, attack him
+    this.DISTANCE_THRESHOLD = 100; // if the hero is within this distance, attack him
+    this.SOUND_DIST_THRESHOLD = 200;
 }
 
 // set AnimatedEntity as parent class
@@ -982,7 +985,8 @@ function Skeleton(game, x, y, width, height) {
     this.scaleToX = 24;
     this.scaleToY = 24;
     this.VELOCITY = 30;
-    this.DISTANCE_THRESHOLD = 150;
+    this.DISTANCE_THRESHOLD = 100;
+    this.SOUND_DIST_THRESHOLD = 200;
 }
 
 // set AnimatedEntity as parent class
@@ -1074,7 +1078,7 @@ function Gem(game, x, y, width, height, color) {
     this.animation = new Animation(this.image, this.width, this.height, 8, 1.75, game.now, 0, 0, true);
     this.scaletoX = 24;
     this.scaleToY = 24;
-    this.DISTANCE_THRESHOLD = 150;
+    this.SOUND_DIST_THRESHOLD = 150;
 }
 
 Gem.prototype = new AnimatedEntity();
@@ -1083,7 +1087,7 @@ Gem.prototype.constructor = Gem;
 // override
 Gem.prototype.update = function() {
     // emit shining sound if the hero is close to the gem
-    if (this.distanceToHero() < this.DISTANCE_THRESHOLD) {
+    if (this.distanceToHero() < this.SOUND_DIST_THRESHOLD) {
         this.emitSound('sounds/shine.wav');
     }
     // call the parent's method as well
@@ -1146,56 +1150,66 @@ function Dungeon(game, enemyProbability, miscProbability) {
 // use a two dimensional array to keep track of the initial objects and entities in the dungeon
 Dungeon.prototype.generateDungeon = function() {
     var numTilesX = Math.ceil(this.game.frameWidth / this.tileSize),
-        numTilesY = Math.ceil(this.game.frameHeight / this.tileSize);
+        numTilesY = Math.ceil(this.game.frameHeight / this.tileSize),
+        goalTileX = numTilesX - 2,
+        goalTileY = 0;
     
+    // generate a completely randomized dungeon
     var dCreator = new RandomizeDungeon(this.game, numTilesX, numTilesY);
-    this.map = dCreator.generateDungeon(numTilesX - 2, 0, 
+    this.map = dCreator.generateDungeon(goalTileX, goalTileY, 
                                Math.floor(this.game.HERO_STARTX/this.tileSize),
                                Math.floor(this.game.HERO_STARTY/this.tileSize));
+  //  console.log('map done');
+    // also make the tile to the left of the goal tile a free space
+    this.map[goalTileX - 1][goalTileY].type = 'F';
     
+    // after we generate this map, we have to make sure that there are no walls/enemies near the hero's start point
+    this.markHeroTerritory(numTilesX, numTilesY);
+
     for (var i = 0; i < numTilesX; ++i) {
-        //this.map[i] = [];
         for (var j = 0; j < numTilesY; ++j) {
             // generate the object to place at this location in the map
-            //this.map[i][j] = this.generateObject(i, j, numTilesX, numTilesY);
+            this.generateObject(i, j, numTilesX, numTilesY);
         }
     }
     
-    console.log(this.map);
 }
-// return wall based on a sample dungeon
-Dungeon.prototype.isWall = function(i, j, numTilesX, numTilesY) {
-    // enclosing rectangular walls for the cave
-    if ((i === 0 || i === numTilesX - 1 || j === 0 || j >= numTilesY - 2) || (i === 5 && j > 8) || (i >= 5 && i <= 15 && j === 8) || (i === 15 && j >= 8 && j <= 20) || (i >= 15 && i <= 20 && j === 20) || (i === 20 && j >= 2 && j <= 20) || (i > 20 && i < 35 && j === 2) || (i === 35 && j >= 2 && j <= 9) || (i === 40 && j > 0 && j <= 12) || (i >= 23 && i <= 40 && j === 12) || (i === 23 && j >= 12 && j <= 16) || (i >= 23 && i <= 44 && j === 16) || (i === 44 && j > 10 && j <= 16)) {
 
-        return true;
+Dungeon.prototype.markHeroTerritory = function(numTilesX, numTilesY) {
+    var endX = Math.ceil(this.game.HERO_STARTX/this.game.dungeon.tileSize),
+        startY = Math.ceil(this.game.HERO_STARTY/this.game.dungeon.tileSize);
+        
+    for (var i = 1; i <= endX; ++i) {
+        for (var j = startY; j < numTilesY - 2; ++j) {
+            this.map[i][j].type = 'R';
+        }
     }
+}
+
+// return wall based on the map
+Dungeon.prototype.isFree = function(i, j) {
+    // return false if it is a wall or is reserved for the hero
+    if (this.map[i][j].type === 'W' || this.map[i][j].type === 'R') {
+        return false;
+    }
+    
+    return true;
 
 }
 // generate the entities based on the map array generated previously
 Dungeon.prototype.generateObject = function(i, j, numTilesX, numTilesY) {
-
-    if (this.isWall(i, j, numTilesX, numTilesY)) {
-        return 'W';
-        // 'W' for Wall
-    }
-
-    if (i <= 1 && j == numTilesY - 2) {// this is where we are placing our hero, so make sure it is free (no other entity there)
-        return 'F';
-    } else if (i === numTilesX - 2 && j === 0) {// place the exit at the top right of the screen
-        return 'O';
-        // 'O' for 'Out'; I wanted to save 'E' for Enemy
-    } else {// here, we can generate enemies and miscellaneous objects
-
-        var rand = Math.random(), // random number from 0.00 to 1 (not including 1)
-        xPos = i * this.tileSize, yPos = j * this.tileSize;
+    if (this.isFree(i, j)) {
+        var rand = Math.random(),
+            xPos = i * this.tileSize,
+            yPos = j * this.tileSize;
 
         // generate an entity based on the random number
-        if (rand <= this.miscProbability) {
+       /* if (rand <= this.miscProbability) {
             this.game.addEntity(new Fire(this.game, xPos, yPos, 64, 64));
-            return 'M';
-            // 'M' for Misc.
-        } else if (rand >= 1 - this.enemyProbability) {
+            return 'M'; // 'M' for Misc.
+        } else*/
+        
+        if (rand >= 1 - this.enemyProbability) {
             var enemy = null;
 
             // further subdivide the enemy based on the random number
@@ -1207,17 +1221,12 @@ Dungeon.prototype.generateObject = function(i, j, numTilesX, numTilesY) {
                     enemy = new Skeleton(this.game, xPos, yPos, 31, 48);
                     break;
             }
-
-            this.game.addEntity(enemy);
             // add the enemy to the game
-            return 'E';
-            // 'E' for Enemy
-        } else {
-            return 'F';
-            // just free space
+            this.game.addEntity(enemy);
         }
     }
 }
+
 // return the winner number out of the number of choices (from 1 to numChoices)
 Dungeon.prototype.getEnemyChoice = function(numChoices) {
     var rand = Math.ceil(Math.random() * 100), div = 100 / numChoices;
@@ -1245,12 +1254,8 @@ Dungeon.prototype.drawDungeon = function() {
     for (var i = 0; i < this.map.length; ++i) {
         for (var j = 0; j < this.map[i].length; ++j) {
             switch (this.map[i][j].type) {
-                case 'F':
-                // free space.
-                case 'E':
-                // enemies and
-                case 'M':
-                    // miscellaneous objects also get drawn a tile
+                case 'F': // free space
+                case 'R': // reserved for hero
                     this.drawTile(i * this.tileSize, j * this.tileSize);
                     break;
                 case 'W':
@@ -1318,7 +1323,7 @@ function GameEngine(ctx) {
     this.msgLog = new MessageLog(this.voice, this.language);
     this.HERO_STARTX = 50;
     this.HERO_STARTY = this.frameHeight - 96;
-    this.ENEMY_PROBABILITY = 1e-2; // 3e-2
+    this.ENEMY_PROBABILITY = 5e-2; // 3e-2
     this.MISC_PROBABILITY = 0; 
     this.GEM_COLORS = ['blue', 'green', 'red']; // 5e-3
 }
