@@ -572,17 +572,17 @@ Hero.prototype.stopSound = function() {
 
 // are we at the goal?
 Hero.prototype.isAtGoal = function() {
-    var goalStartX = this.game.dungeon.goalX*this.game.dungeon.tileSize - this.game.dungeon.tileSize,
-        goalStartY = this.game.dungeon.goalY*this.game.dungeon.tileSize,
+    var goalStartX = this.game.dungeon.goalTileX*this.game.dungeon.tileSize - this.game.dungeon.tileSize,
+        goalStartY = this.game.dungeon.goalTileY*this.game.dungeon.tileSize,
         goalEndX = goalStartX + this.game.dungeon.tileSize,
         goalEndY = goalStartY + this.game.dungeon.tileSize;
         
     var goalRect = new Rectangle(goalStartX, goalEndX, goalStartY, goalEndY);
         heroRect = new Rectangle(this.game.hero.x, this.game.hero.x + this.game.hero.scaleToX,
                                   this.game.hero.y, this.game.hero.y + this.game.hero.scaleToY);
-   
+
     if (goalRect.isIntersecting(heroRect)) {
-        alert('at goal!');
+        levelComplete = true;
     }
 }
 
@@ -1170,6 +1170,7 @@ function Dungeon(game, enemyProbability, miscProbability) {
 
 // use a two dimensional array to keep track of the initial objects and entities in the dungeon
 Dungeon.prototype.generateDungeon = function() {
+    levelComplete = false;
     var numTilesX = Math.ceil(this.game.frameWidth / this.tileSize),
         numTilesY = Math.ceil(this.game.frameHeight / this.tileSize);
         
@@ -1372,6 +1373,11 @@ GameEngine.prototype.restartGame = function() {
     gameOver = false;
 }
 
+GameEngine.prototype.initNextLevel = function() {
+    // make the enemies stronger and restart game
+    
+}
+
 GameEngine.prototype.addEntity = function(entity) {
     this.entities.push(entity);
 }
@@ -1381,6 +1387,11 @@ GameEngine.prototype.loop = function() {
     this.update();
     if (gameOver) {
         this.restartGame();
+        return;
+    }
+    
+    if (levelComplete) {
+        this.initNextLevel();
         return;
     }
     this.draw();
@@ -1552,6 +1563,7 @@ var ASSET_MANAGER = new AssetManager(),
     canvas, 
     game, 
     gameOver,
+    levelComplete = false,
     animFrame;
 
 window.addEventListener('load', function() {
