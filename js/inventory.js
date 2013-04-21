@@ -38,7 +38,7 @@ Inventory.prototype.addItem = function(item) {
 
 // add actual slot for the item to the dialog
 Inventory.prototype.addSlot = function(type) {
-    this.$dialog.append('<div id="' + type + '"><span class="quantity">1</span></div>');
+    this.$dialog.append('<a class="item" tabindex = "1" id="' + type + '"><span class="quantity">1</span></a>');
     this.setBackgroundImage(type, this.numDistinctItems);
 }
 
@@ -80,8 +80,8 @@ Inventory.prototype.setBackgroundImage = function(type) {
     }
     
     // set the background to the correct item image and the tooltip
-    $('#inventoryDialog > div#' + type).css("background", src + ') no-repeat')
-                                       .attr("title", tooltip);
+    $('#inventoryDialog > a#' + type).css("background", src + ') no-repeat')
+                                     .attr("title", tooltip);
     
     $(document).tooltip();
 }
@@ -102,7 +102,7 @@ Inventory.prototype.isFull = function() {
 
 Inventory.prototype.updateQuantityDisplay = function(type, quantity) {
     // update the quantity displayed
-    $('#inventoryDialog > div#' + type + ' > .quantity').text(quantity);
+    $('#inventoryDialog > a#' + type + ' > .quantity').text(quantity);
 }
 
 // uses the item with the given ID
@@ -115,8 +115,8 @@ Inventory.prototype.useItem = function(itemID) {
     // remove the item
     if (item.quantity === 1) {
         // need to remove it from the array and from the inventory dialog
-        $('#inventoryDialog div').eq(itemID)
-                                 .remove();
+        $('#inventoryDialog a').eq(itemID)
+                               .remove();
                                  
         this.items.splice(itemID, 1); // remove it from the array as well
         --this.numDistinctItems;
@@ -160,10 +160,35 @@ Inventory.prototype.init = function() {
     this.$dialog = $('#inventoryDialog');
     
     // allow the user to use the item on click
-    this.$dialog.on('click', 'div', function(e) {
+    this.$dialog.on('click', 'a', function(e) {
         var index = that.getItemIndexByType($(this).attr('id'));
         that.useItem(index);
         e.preventDefault();
+    });
+    
+    // or alternatively, allow the user to press enter to use the item
+    this.$dialog.on('keydown', 'a', function(e) {
+        var keyCode = e.keyCode || e.which;
+        // if enter is pressed, treat it as a click
+        if (keyCode === 13) {
+            $(this).click();
+            e.preventDefault();
+        }
+    });
+    
+    // text to speech for items: tell the user what the item is and its effect
+    this.$dialog.on('focus', 'a', function(e) {
+        var $this = $(this);
+        
+        // title bug: for some very weird reason, the title returns undefined sometimes
+        if (typeof $this.attr('title') === 'undefined') {
+            $this.focus();
+        }
+        
+        if ($this.attr('class') === 'item') {
+            myAudio.say(that.game.voice, that.game.language, $this.attr('id').replace('_', ' ') + ' ' + $this.attr('title') + 
+                        ', Quantity: ' + that.items[that.getItemIndexByType($this.attr('id'))].quantity);
+        } 
     });
     
     // text to speech for the text on the button
