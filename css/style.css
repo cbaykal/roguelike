@@ -61,7 +61,7 @@ html {
 	color: yellow;
 }
 
-#inventoryDialog div {
+#inventoryDialog a {
 	cursor: pointer;
 	overflow: hidden;
 	float: left;
@@ -76,7 +76,7 @@ html {
 	padding-top: 2px;
 }
 
-#inventoryDialog div span.quantity {
+#inventoryDialog a span.quantity {
 	position: absolute;
 	bottom: 0px;
 	right: 2px;
