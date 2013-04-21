@@ -13,8 +13,29 @@ function Vertex(x, y, type) {
     this.visitedNeighbors = 0;
 }
 
+// goal object used for path finding and clearing the area
+function Goal(randDungeon, game, x, y) {
+    this.game = game;
+    this.randDungeon = randDungeon;
+    this.x = x;
+    this.y = y;
+}
+
+Goal.prototype.isPathClear = function(x, y) {
+    var x = Math.floor(x/this.game.dungeon.tileSize),
+        y = Math.floor(y/this.game.dungeon.tileSize);
+    
+    if (this.randDungeon.isValidVertex(x, y) && this.randDungeon.map[x][y].type === 'F') {
+        return true;
+    }
+    
+    console.log('returning false');
+    return false;
+}
+
 // arguments: width and height of the grid-style map
-function RandomizeDungeon(width, height) {
+function RandomizeDungeon(game, width, height) {
+    this.game = game;
     this.width = width;
     this.height = height;
     this.map = [[]]; // multi-dimensional array to keep track of map
@@ -22,9 +43,9 @@ function RandomizeDungeon(width, height) {
     this.NEIGHBORS_VISITED_THRESHOLD = 1; // so that we avoid too many empty spaces with no walls
     this.visitedGoal = false; // we have not yet visited the goal vertex
     this.TOTAL_TILES = width*height;
-    this.THRESHOLD_NEIGHBORS_EMPTY = 4; // used for simplifying the map 
-    this.MIN_WALL_NUM = Math.round(this.TOTAL_TILES*(1/5));
-    this.MAX_WALL_NUM = Math.round(this.TOTAL_TILES*(1/3));
+    this.THRESHOLD_NEIGHBORS_EMPTY = 3; // used for simplifying the map 
+    this.MIN_WALL_NUM = Math.round(this.TOTAL_TILES*(1/2));
+    this.MAX_WALL_NUM = Math.round(this.TOTAL_TILES*(3/4));
 }
 
 // initialize the map with walls
@@ -47,28 +68,38 @@ RandomizeDungeon.prototype.initMap = function() {
 // simplify map and make it aesthetically pleasing: 
 // remove any 'lonely' pieces of wall and connect any possible corridors
 RandomizeDungeon.prototype.simplifyMap = function(map) {
-    for (var i = 0; i < this.map.length; ++i) {
-        for (var j = 0; j < this.map[i].length; ++j) {
-            if (this.map[i][j].type === 'W') {
-                this.removeLonelyWall(i, j);
-            } else {
-                ++this.numFreeSpace;
-            }
-        }
-    }
+    // first remove walls with 3 neighbors empty
+    this.removeAllLonelyWalls(3);
+    // then remove any remaining completely lonely walls (4 neighbors empty)
+    this.removeAllLonelyWalls(4);
     
     // now connect any paths
     for (var i = 0; i < this.map.length; ++i) {
         for (var j = 0; j < this.map[i].length; ++j) {
-            
+            if (this.map[i][j].type === 'W') {
+                this.connectCorridor(i, j);
+            }
         }
     }
     
     return this.map;
 }
 
+RandomizeDungeon.prototype.removeAllLonelyWalls = function(threshold) {
+    this.numFreeSpace = 0;
+    for (var i = 0; i < this.map.length; ++i) {
+        for (var j = 0; j < this.map[i].length; ++j) {
+            if (this.map[i][j].type === 'W') {
+                this.removeLonelyWall(i, j, threshold);
+            } else {
+                ++this.numFreeSpace;
+            }
+        }
+    }
+}
+
 // remove lonely wall if appropriate
-RandomizeDungeon.prototype.removeLonelyWall = function(x, y) {
+RandomizeDungeon.prototype.removeLonelyWall = function(x, y, threshold) {
     var vertex = this.map[x][y],
         neighbors = ['N', 'S', 'W', 'E'],
         numEmpty = 0; // number of free space around the wall
@@ -83,18 +114,31 @@ RandomizeDungeon.prototype.removeLonelyWall = function(x, y) {
     }
     
     // finally, if the number of spaces was above threshold, remove the wall
-    if (numEmpty >= this.THRESHOLD_NEIGHBORS_EMPTY) {
+    if (numEmpty >= threshold) {
         // make it free space instead of a wall
         this.map[x][y].type = 'F';
         ++this.numFreeSpace;
     }
 }
 
-
 RandomizeDungeon.prototype.connectCorridor = function(x, y) {
-    
+    var vertex = this.map[x][y],
+        neighbors = ['N', 'S', 'W', 'E'];
+        
+    for (var k = 0; k < neighbors.length; ++k) {
+        // get the coordinates of the neighbors 2 tiles away
+        var nCoords = this.getNeighborCoords(neighbors[k], vertex, 1),
+            nnCoords = this.getNeighborCoords(neighbors[k], vertex, 2); // neighbor of neighbor
+            
+        if (this.isValidVertex(nCoords.x, nCoords.y) && this.isValidVertex(nnCoords.x, nnCoords.y) &&
+            this.map[nCoords.x][nCoords.y].type === 'F' && this.map[nnCoords.x][nnCoords.y].type === 'W') {
+            
+            // make the free space in between the two walls a wall to connect them
+            this.map[nCoords.x][nCoords.y].type = 'W';
+            --this.numFreeSpace;
+        }
+    }
 }
-
 
 // function to see whether the map is reasonable
 RandomizeDungeon.prototype.isMapGood = function() {
@@ -118,11 +162,22 @@ RandomizeDungeon.prototype.generateDungeon = function(exitX, exitY, goalX, goalY
     this.initMap();
     // run our randomized depth first algorithm to create the map
     this.depthFirst(this.map[exitX][exitY]);
+    
+    var pathFinder = new PathFinder(this.game, 
+                                   new Goal(this, this.game, goalX*this.game.dungeon.tileSize, goalY*this.game.dungeon.tileSize),
+                                   new Goal(this, this.game, exitX*this.game.dungeon.tileSize, exitY*this.game.dungeon.tileSize)),
+        path = pathFinder.findPath();
+    
     // simplify the map
     this.simplifyMap(this.map);
     
-    // if the map is good, then return it, else repeat the process all over
-    if (this.isMapGood()) {
+    // clear the hero's path to the goal to ensure that it is reachable
+    if (path) {
+        this.clearPath(path);
+    }
+
+    // if the map and path are good to go, then return the map, else repeat the process all over
+    if (this.isMapGood() && path) {
         return this.map;
     }
 
@@ -133,6 +188,48 @@ RandomizeDungeon.prototype.generateDungeon = function(exitX, exitY, goalX, goalY
 RandomizeDungeon.prototype.isValidVertex = function(x, y) {
     return x >= 1 && x <= this.width - 2 &&
            y >= 1 && y <= this.height - 3;
+}
+
+// clear the hero's path
+RandomizeDungeon.prototype.clearPath = function(path) {
+    // consider each of the path
+    path.forEach(function(node, index) {
+        var vertex = this.map[node.x][node.y];
+        vertex.type = 'F';
+        
+        // widen north and south if necessary
+        this.widenPath(vertex, 'N', 'S');
+        // widen west and east if necessary
+        this.widenPath(vertex, 'W', 'E');
+       
+    }, this);
+}
+
+RandomizeDungeon.prototype.widenPath = function(vertex, dOne, dTwo) {
+    var nOne = null,
+        nTwo = null,
+        vOne = null,
+        vTwo = null;
+        
+    // now compare west and east
+    nOne = this.getNeighborCoords(dOne, vertex);
+    nTwo = this.getNeighborCoords(dTwo, vertex);
+    
+    // boundary cases: what if the wall is valid but
+    // it is right next to the game boundary?
+    if (this.isValidVertex(nOne.x, nOne.y) && this.isValidVertex(nTwo.x, nTwo.y)) {
+        vOne = this.map[nOne.x][nOne.y];
+        vTwo = this.map[nTwo.x][nOne.y];
+        console.log('here');
+        // if they are both walls, change that
+        if (vOne.type === 'W' && vTwo.type === 'W') {
+            console.log('widening path');
+            // make them both empty spaces
+            vOne.type = 'F';
+            vTwo.type = 'F';
+            this.numFreeSpace += 2;
+        }
+    }
 }
 
 RandomizeDungeon.prototype.shuffleNeighbors = function(array) {
@@ -159,16 +256,16 @@ RandomizeDungeon.prototype.getNeighborCoords = function(direction, vertex, dista
         
     switch (direction) {
         case 'N':
-            y += -1;
+            y += -distance;
             break;
         case 'S':
-            y += 1;
+            y += distance;
             break;
         case 'W':
-            x += -1;
+            x += -distance;
             break;
         case 'E':
-            x += 1;
+            x += distance;
             break;
     }
     

@@ -1138,7 +1138,7 @@ Dungeon.prototype.generateDungeon = function() {
     var numTilesX = Math.ceil(this.game.frameWidth / this.tileSize),
         numTilesY = Math.ceil(this.game.frameHeight / this.tileSize);
     
-    var dCreator = new RandomizeDungeon(numTilesX, numTilesY);
+    var dCreator = new RandomizeDungeon(this.game, numTilesX, numTilesY);
     this.map = dCreator.generateDungeon(numTilesX - 2, 0, 
                                Math.floor(this.game.HERO_STARTX/this.tileSize),
                                Math.floor(this.game.HERO_STARTY/this.tileSize));
