@@ -778,7 +778,7 @@ Enemy.prototype.update = function() {
 
         switch (this.direction) {
             case 'up':
-                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x, this.y - delta)) {
+                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x, this.y - delta, true, false, true)) {
                     this.y -= delta;
                 } else {
                     this.wandering = false;
@@ -787,7 +787,7 @@ Enemy.prototype.update = function() {
                 break;
 
             case 'down':
-                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x, this.y + delta)) {
+                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x, this.y + delta, true, false, true)) {
                     this.y += delta;
                 } else {
                     this.wandering = false;
@@ -796,7 +796,7 @@ Enemy.prototype.update = function() {
                 break;
 
             case 'right':
-                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x + delta, this.y)) {
+                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x + delta, this.y, true, false, true)) {
                     this.x += delta;
                 } else {
                     this.wandering = false;
@@ -805,7 +805,7 @@ Enemy.prototype.update = function() {
                 break;
 
             case 'left':
-                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x - delta, this.y)) {
+                if ((this.wandering || this.canAttackHero()) && this.isPathClear(this.x - delta, this.y, true, false, true)) {
                     this.x -= delta;
                 } else {
                     this.wandering = false;
@@ -820,7 +820,8 @@ Enemy.prototype.update = function() {
         }
 
         if (this.game.now) {
-            this.animation = this.animation && this.direction === this.animation.direction ? this.animation : new Animation(this.image, this.width, this.height, 3, 1.0, this.game.now, this.offsetX, this.offsetY);
+            this.animation = this.animation && this.direction === this.animation.direction ? this.animation :
+                             new Animation(this.image, this.width, this.height, 3, 1.0, this.game.now, this.offsetX, this.offsetY);
             this.animation.direction = this.direction;
         }
 
