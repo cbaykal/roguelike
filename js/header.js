@@ -951,8 +951,7 @@ function Ogre(game, x, y, width, height) {
     this.scaleToY = 24;
     // 38
     this.VELOCITY = 30;
-    this.DISTANCE_THRESHOLD = 100;
-    // if the hero is within this distance, attack him
+    this.DISTANCE_THRESHOLD = 150; // if the hero is within this distance, attack him
 }
 
 // set AnimatedEntity as parent class
@@ -973,7 +972,7 @@ function Skeleton(game, x, y, width, height) {
     this.scaleToX = 24;
     this.scaleToY = 24;
     this.VELOCITY = 30;
-    this.DISTANCE_THRESHOLD = 100;
+    this.DISTANCE_THRESHOLD = 150;
 }
 
 // set AnimatedEntity as parent class
@@ -1122,6 +1121,7 @@ function Dungeon(game, enemyProbability, miscProbability) {
     this.miscProbability = miscProbability;
     this.map = [[]];
     // two-dimensional array (x,y coordinates)
+   // this.tileSize = 24;
     this.tileSize = 24;
     this.offsetY = 48;
     this.tile = ASSET_MANAGER.getAsset('images/caveTiles.png');
@@ -1135,15 +1135,23 @@ function Dungeon(game, enemyProbability, miscProbability) {
 
 // use a two dimensional array to keep track of the initial objects and entities in the dungeon
 Dungeon.prototype.generateDungeon = function() {
-    var numTilesX = Math.ceil(this.game.frameWidth / this.tileSize), numTilesY = Math.ceil(this.game.frameHeight / this.tileSize);
-
+    var numTilesX = Math.ceil(this.game.frameWidth / this.tileSize),
+        numTilesY = Math.ceil(this.game.frameHeight / this.tileSize);
+    
+    var dCreator = new RandomizeDungeon(numTilesX, numTilesY);
+    this.map = dCreator.generateDungeon(numTilesX - 2, 0, 
+                               Math.floor(this.game.HERO_STARTX/this.tileSize),
+                               Math.floor(this.game.HERO_STARTY/this.tileSize));
+    
     for (var i = 0; i < numTilesX; ++i) {
-        this.map[i] = [];
+        //this.map[i] = [];
         for (var j = 0; j < numTilesY; ++j) {
             // generate the object to place at this location in the map
-            this.map[i][j] = this.generateObject(i, j, numTilesX, numTilesY);
+            //this.map[i][j] = this.generateObject(i, j, numTilesX, numTilesY);
         }
     }
+    
+    console.log(this.map);
 }
 // return wall based on a sample dungeon
 Dungeon.prototype.isWall = function(i, j, numTilesX, numTilesY) {
@@ -1225,8 +1233,8 @@ Dungeon.prototype.drawWall = function(x, y) {
 // draw walls and free space for the dungeon; the entities will be drawn in their own respective draw functions
 Dungeon.prototype.drawDungeon = function() {
     for (var i = 0; i < this.map.length; ++i) {
-        for (var j = 0; j < this.map.length; ++j) {
-            switch (this.map[i][j]) {
+        for (var j = 0; j < this.map[i].length; ++j) {
+            switch (this.map[i][j].type) {
                 case 'F':
                 // free space.
                 case 'E':
@@ -1246,7 +1254,8 @@ Dungeon.prototype.drawDungeon = function() {
         }
     }
 }
-// updates this.map in case entities have moved
+
+/*// updates this.map in case entities have moved
 Dungeon.prototype.updateMap = function(entity, oldPosition) {
 
     // get the corresponding slots in this.map
@@ -1276,7 +1285,9 @@ Dungeon.prototype.updateMap = function(entity, oldPosition) {
             // 'M' for miscellaneous
             break;
     }
-}
+}*/
+
+
 // code for the game engine which will handle the heavy lifting
 function GameEngine(ctx) {
     this.ctx = ctx;
@@ -1295,7 +1306,9 @@ function GameEngine(ctx) {
     this.voice = 'child';
     this.language = 'en';
     this.msgLog = new MessageLog(this.voice, this.language);
-    this.ENEMY_PROBABILITY = 1e-1 // 3e-2
+    this.HERO_STARTX = 50;
+    this.HERO_STARTY = this.frameHeight - 96;
+    this.ENEMY_PROBABILITY = 1e-2; // 3e-2
     this.MISC_PROBABILITY = 0; 
     this.GEM_COLORS = ['blue', 'green', 'red']; // 5e-3
 }
@@ -1395,8 +1408,9 @@ GameEngine.prototype.update = function() {
 }
 
 GameEngine.prototype.initHero = function() {
-     // (x, y) = (0, 0), width = 64, height = 64
-    var hero = new Hero(this, 50, this.frameHeight - 96, 64, 64);
+     // width = 64, height = 64
+    // 50, frameHeight - 96
+    var hero = new Hero(this, this.HERO_STARTX, this.HERO_STARTY, 64, 64);
     hero.inventory = new Inventory(this);
     // new inventory for the hero
     hero.stats = new Stats(this);

@@ -48,10 +48,10 @@ Node.prototype.setHAndUpdateF = function(h) {
     this.f = this.g + h;
 }
 
-function PathFinder(game, hero, enemy) {
+function PathFinder(game, hero, goal) {
     this.game = game;
     this.hero = hero;
-    this.enemy = enemy;
+    this.goal = goal;
     this.goalNode = null;
     this.open = [];
     this.closed = [];
@@ -124,7 +124,7 @@ PathFinder.prototype.getNeighboringNodes = function(node) {
             newY = node.y + direction[1];
             
         // check to see whether the path is clear
-       if(this.enemy.isPathClear(newX*this.game.dungeon.tileSize, newY*this.game.dungeon.tileSize, false, true, false)) {
+       if(this.goal.isPathClear(newX*this.game.dungeon.tileSize, newY*this.game.dungeon.tileSize, false, true, false)) {
             var newNode = new Node(newX, newY, node, node.g + this.MOVEMENT_COST);
             newNode.setHAndUpdateF(this.getH(newNode));
             // add it to the neighbors array
@@ -167,7 +167,7 @@ PathFinder.prototype.findPath = function() {
 
     this.goalNode = new Node(tile.i, tile.j, null, 0);
     
-    tile = this.getTile(this.enemy.x, this.enemy.y);
+    tile = this.getTile(this.goal.x, this.goal.y);
 
     var startNode = new Node(tile.i, tile.j, null, 0),
         bestNode = {},
