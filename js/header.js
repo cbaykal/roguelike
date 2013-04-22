@@ -258,7 +258,6 @@ AnimatedEntity.prototype.getDeltaPosition = function() {
 var count = 0;
 // check the proposed x and y bounds and see whether we can move there
 AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, compareEntities, considerHero) {
-
     var compareEntities = typeof compareEntities === 'undefined' ? true : compareEntities, 
         considerHero = typeof considerHero === 'undefined' ? true : considerHero;
 
@@ -267,8 +266,8 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, c
         x : newX,
         y : newY
     };
+   
     // gets the corresponding tile number (i and j) for use in retrieval in map
-
     var tileX = Math.floor(adjustedCoords.x / this.game.dungeon.tileSize),
         tileY = Math.floor(adjustedCoords.y / this.game.dungeon.tileSize);
 
@@ -392,28 +391,28 @@ AnimatedEntity.prototype.attackEnemy = function() {
 // in most cases, we have to adjust the coordinates accordingly
 // for the collision detection to look more natural
 AnimatedEntity.prototype.getAdjustedCoords = function(newX, newY) {
-    var x = null, y = null;
-
+    var x = null,
+        y = null;
+    
     switch(this.direction) {
         case 'up':
             // most natural way to do is to take the character's center
-            x = newX + this.scaleToX / 2;
+            x = newX + this.scaleToX/2;
             y = newY + this.scaleToY / 2;
             break;
         case 'down':
             // consider the midpoint of the feet
             x = newX + this.scaleToX / 2;
-            y = newY + this.scaleToY;
+            y = newY + this.scaleToY /2;
             break;
         case 'right':
-            x = newX + this.scaleToX / 2;
-            y = newY + this.scaleToY;
-            break;
-        case 'left':
-            x = newX;
+            x = newX + this.scaleToX/2;
             y = newY + this.scaleToY / 2;
             break;
-
+        case 'left':
+            x = newX + this.scaleToX/2;
+            y = newY + this.scaleToY / 2;
+            break;
         case 'punch':
             x = newX;
             y = newY;
@@ -448,6 +447,9 @@ function Hero(game, x, y, width, height) {
     this.warnedLowHealth = false;
     this.warnedVeryLowHealth = false;
     this.tellingDirection = false;
+    this.adviceConfusedX = false; // if the advice is to keep going 'west' then 'east' vice-versa
+    this.adviceConfusedY = false; // same as above for 'north' and 'south'
+    this.advice = ''; // keep track of the advice given
     // how much the hero damages the opponent
     this.VELOCITY = 100;
     this.ATTACKING_RANGE = 10;
@@ -595,17 +597,18 @@ Hero.prototype.sayDirection = function() {
                                   this.game.dungeon.goalTileY*this.game.dungeon.tileSize)),
         path = planner.findPath(),  // the whole path
         next = path[1], // the next tile to go to
-        currentTileX = Math.floor(this.x/this.game.dungeon.tileSize),
-        currentTileY = Math.floor(this.y/this.game.dungeon.tileSize),
+        adjustedCoords = this.getAdjustedCoords(this.x, this.y),
+        currentTileX = Math.floor((adjustedCoords.x)/this.game.dungeon.tileSize),
+        currentTileY = Math.floor((adjustedCoords.y)/this.game.dungeon.tileSize),
         rand = Math.random(),
         that = this,
         advice = '';
         
     // get the advice
-    advice = this.getAdvice(path, 1, currentTileX, currentTileY, null);
+    this.advice = this.getAdvice(path, 1, currentTileX, currentTileY, null);
     
     // tell the player the correct direction to go
-    myAudio.say('child', 'en', advice + '.');
+    myAudio.say(this.game.voice, this.game.language, this.advice + '.');
     myAudio.getAudio().addEventListener('ended', function() {
         that.tellingDirection = false;
     }, false);
@@ -614,24 +617,55 @@ Hero.prototype.sayDirection = function() {
 
 // recursive function to get the correct advice with respect to where to move next
 Hero.prototype.getAdvice = function(path, indexToConsider, currentTileX, currentTileY, failedAdvice) {
+    // something must have gone terribly wrong... include this boundary case
+    if (!(path[indexToConsider])) {
+        return 'Advice cannot be given for your location.';
+    }
     var next = path[indexToConsider],
         dx = next.x - currentTileX,
         dy = next.y - currentTileY,
+        actualDx = 0, // the proposed change to x based on advice
+        actualDy = 0, // the proposed change to y based on advice
         advice = 'Go ';
-        
-    if (dy !== 0) {
-        advice += dy < 0 ? 'north' : 'south';
-    } else if (dx !== 0) {
-        advice += dx < 0 ? 'west' : 'east';
+
+    if (Math.random() < 0.5) {
+        if (dy !== 0 && !this.adviceConfusedY) {
+            advice += dy < 0 ? 'north' : 'south';
+            actualDy = dy < 0 ? -1 : 1;
+        } else if (dx !== 0 && !this.adviceConfusedX) {
+            advice += dx < 0 ? 'west' : 'east';
+            actualDx = dx < 0 ? -1 : 1;
+        } else {
+            return this.getAdvice(path, ++indexToConsider, currentTileX, currentTileY, null);
+        }
     } else {
-        advice = 'You are on the right track';
+        if (dx !== 0 && !this.adviceConfusedX) {
+            advice += dx < 0 ? 'west' : 'east';
+            actualDx = dx < 0 ? -1 : 1;
+        } else if (dy !== 0 && !this.adviceConfusedY) {
+            advice += dy < 0 ? 'north' : 'south';
+            actualDy = dy < 0 ? -1 : 1;
+        } else {
+            return this.getAdvice(path, ++indexToConsider, currentTileX, currentTileY, null);
+        }
     }
     
+    var fAdv = this.advice.replace('Go ', ''),
+        ffAdv = advice.replace('Go ', '');
+   // console.log('prev:', fAdv, 'now:',ffAdv);
+   
+    // if we keep giving conflicting advice i.e. go north, then go south, then go north again, we have to change the direction
+    this.adviceConfusedX = (fAdv === 'west' && ffAdv === 'east') || 
+                           (fAdv === 'east' && ffAdv === 'west') ? true : false;
+    this.adviceConfusedY = (fAdv=== 'north' && ffAdv === 'south') ||
+                           (fAdv=== 'south' && ffAdv === 'north') ? true : false;
+                           
+    console.log(this.adviceConfusedX, this.adviceConfusedY);
     // either the next tile is blocked or we are giving the same bad advice,
     // so consider the subsequent tile in the path to the goal 
-    if (!this.isPathClear(next.x*this.game.dungeon.tileSize, next.y*this.game.dungeon.tileSize, true, false, false) ||
+    if (!this.isPathClear((currentTileX + actualDx)*this.game.dungeon.tileSize,
+         (currentTileY + actualDy)*this.game.dungeon.tileSize, true, false, false) ||
         (failedAdvice && failedAdvice === advice)) {
-        console.log('advice failed');
         return this.getAdvice(path, ++indexToConsider, currentTileX, currentTileY, advice);
     }
     
@@ -661,7 +695,9 @@ Hero.prototype.update = function() {
         this.warnedVeryLowHealth = false;
     }
 
-    var delta = this.game.now ? this.getDeltaPosition() : 0, baseOffsetY = 518, punchOffset = 514;
+    var delta = this.game.now ? this.getDeltaPosition() : 0, 
+        baseOffsetY = 518, 
+        punchOffset = 514;
 
     switch (this.game.key) {
         case 38:
@@ -727,15 +763,16 @@ Hero.prototype.update = function() {
             this.offsetY = punchOffset + this.offsetY > baseOffsetY + punchOffset + this.height * 3 ? this.offsetY : punchOffset + this.offsetY;
             this.attackingDirection = this.direction === 'punch' ? this.attackingDirection : this.direction;
             this.direction = 'punch';
-            this.emitSound('sounds/punch.wav');
+            this.emitSound('sounds/punch.wav', false);
             break;
         case 72: // h for help
             // tell the user via speech where to go
             if (!this.tellingDirection) {
+                // with the boolean we make sure we don't overlap same advice
                 this.tellingDirection = true;
                 this.sayDirection();
             }
-            break;
+        // *PURPOSEFULLY avoiding a break here (reset key)
         default:
             this.game.key = null;
             this.game.previousKey = null;
@@ -1403,7 +1440,7 @@ function GameEngine(ctx) {
     this.msgLog = new MessageLog(this.voice, this.language);
     this.HERO_STARTX = 50;
     this.HERO_STARTY = this.frameHeight - 96;
-    this.ENEMY_PROBABILITY = 5e-2; // 3e-2
+    this.ENEMY_PROBABILITY = 0; // 5e-2; 2e-2
     this.MISC_PROBABILITY = 0; 
     this.GEM_COLORS = ['blue', 'green', 'red']; // 5e-3
 }
