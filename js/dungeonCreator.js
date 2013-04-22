@@ -33,7 +33,7 @@ Goal.prototype.isPathClear = function(x, y) {
 }
 
 // arguments: width and height of the grid-style map
-function RandomizeDungeon(game, width, height) {
+function RandomizeDungeon(game, numTilesX, numTilesY) {
     this.game = game;
     this.width = width;
     this.height = height;
@@ -43,8 +43,8 @@ function RandomizeDungeon(game, width, height) {
     this.visitedGoal = false; // we have not yet visited the goal vertex
     this.TOTAL_TILES = width*height;
     this.THRESHOLD_NEIGHBORS_EMPTY = 3; // used for simplifying the map 
-    this.MIN_WALL_NUM = Math.round(this.TOTAL_TILES*(1/4)); // was 1/4
-    this.MAX_WALL_NUM = Math.round(this.TOTAL_TILES*(5/12)); // was 1/2
+    this.MIN_WALL_NUM = Math.round(this.TOTAL_TILES*(4/5)); // was 1/4
+    this.MAX_WALL_NUM = Math.round(this.TOTAL_TILES*(9/10)); // was 1/2; 5/12
 }
 
 // initialize the map with walls
@@ -177,7 +177,7 @@ RandomizeDungeon.prototype.generateDungeon = function(exitX, exitY, goalX, goalY
         path = pathFinder.findPath();
     
     // connect any 'close' points
-    this.simplifyMap(this.map);
+   // this.simplifyMap(this.map);
     
     // clear the hero's path to the goal to ensure that it is reachable
     if (path) {

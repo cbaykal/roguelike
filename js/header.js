@@ -604,6 +604,7 @@ Hero.prototype.sayDirection = function() {
         that = this,
         advice = '';
         
+    console.log(planner);
     // get the advice
     this.advice = this.getAdvice(path, 1, currentTileX, currentTileY, null);
     
@@ -1210,12 +1211,15 @@ Gem.prototype.update = function() {
     AnimatedEntity.prototype.update.call(this);
 }
 // makes the hero gain this item
-Gem.prototype.pickUp = function() {
+Gem.prototype.pickUp = function(playSound) {
     // will hold a function to the effect
-    var activateEffect = null;
-
-    this.game.msgLog.log('You picked up a ' + this.color + ' gem!');
-    this.emitSound('sounds/itemGain.mp3', false);
+    var activateEffect = null,
+        playSound = typeof playSound === 'undefined' ? true : playSound;
+    
+    if (playSound) {
+        this.game.msgLog.log('You picked up a ' + this.color + ' gem!');
+        this.emitSound('sounds/itemGain.mp3', false);
+    }
 
     // determine the gem's effect based on its color
     switch (this.color) {
@@ -1240,9 +1244,9 @@ Gem.prototype.pickUp = function() {
     }
 
     this.game.hero.inventory.addItem(new Item(this.game, this.color + '_gem', activateEffect));
-    this.alive = false;
-    // remove from the world
+    this.alive = false;  // remove from the world
 }
+
 function Dungeon(game, enemyProbability, miscProbability) {
     this.game = game;
     // this.percentWalls = percentWalls;
@@ -1278,7 +1282,7 @@ Dungeon.prototype.generateDungeon = function() {
     this.map = this.randDungeonGen.generateDungeon(this.goalTileX, this.goalTileY, 
                                                     Math.floor(this.game.HERO_STARTX/this.tileSize),
                                                     Math.floor(this.game.HERO_STARTY/this.tileSize));
-  //  console.log('map done');
+     // console.log('map done');
     // also make the tile to the left of the goal tile a free space
     this.map[this.goalTileX - 1][this.goalTileY].type = 'F';
     
@@ -1291,7 +1295,6 @@ Dungeon.prototype.generateDungeon = function() {
             this.generateObject(i, j, numTilesX, numTilesY);
         }
     }
-    
 }
 
 Dungeon.prototype.markHeroTerritory = function(numTilesX, numTilesY) {
@@ -1669,6 +1672,7 @@ GameEngine.prototype.initGameButtons = function() {
         yOffset = -(this.dungeon.tileSize * 2 - $div.height()) / 2;// center the buttons vertically
     // place the buttons to the lower right of the canvas
     $div.css({
+        display: 'block',
         left : $canvas.offset().left + $canvas.width() - $div.width() + xOffset,
         top : $canvas.offset().top + $canvas.height() - $div.height() + yOffset,
     });
@@ -1686,16 +1690,116 @@ var ASSET_MANAGER = new AssetManager(),
 // these keys cause circular reference in JSON.stringify, so avoid them
 function censor(key, value) {
     if (key === 'game' || key === '$dialog' || key === 'randDungeonGen' || key === 'tile') {
-        console.log('returning undefined');
         return undefined;
     }
     return value;
+}
+
+function showCanvas() {
+    var sideMargin = 0;
+    
+    $('#gameMenu, #uncLogo').hide();
+    // set canvas width to occupy the whole page
+    canvas = document.getElementById('canvas');
+    
+    $('#canvas').css('visibility', 'visible');
+    // get the correct side margins
+    sideMargin = ($(document).width() - $(canvas).width())/2;
+        
+    // adjust margins (normal css margins don't work for some reason)
+    $('#canvas').css({
+        'margin-left': sideMargin,
+        'margin-right': sideMargin,
+        'margin-top': -2
+    });
 }
     
 // global function for loading the game
 function loadGame() {
     if (localStorage && localStorage['savedGameExists'] === 'true') {
-        console.log(JSON.parse(localStorage['entities']));
+        // initialization of canvas and game
+        canvas = document.getElementById('canvas');
+        game = new GameEngine(canvas.getContext('2d'));
+        lCanv = game.getLoadingScreen();
+        
+        showCanvas();
+        // queue all assets
+        queueAllAssets();
+        
+        // display the loading screen while we download assets
+        game.ctx.drawImage(lCanv, (game.frameWidth - lCanv.width) / 2, (game.frameHeight - lCanv.height) / 2);
+        
+        var gameInfo = JSON.parse(localStorage['gameInfo']),
+            entities = JSON.parse(localStorage['entities']),
+            map = JSON.parse(localStorage['map']),
+            dungeon = null,
+            numTilesX = 0,
+            numTilesY = 0;
+        
+        ASSET_MANAGER.downloadAll(game, function() {
+            // before we create the enemies and our hero, we need to set our dungeon level
+            game.dungeonLevel = parseInt(gameInfo.dungeonLevel, 10);
+            
+            // retrieve the entities and the dungeon
+            for (var i = 0; i < entities.length; ++i) {
+                var entity = entities[i],
+                    newEntity = null,
+                    items = null;
+                    
+                switch (entity.type) {
+                    case 'Hero':
+                        newEntity = new Hero(game, entity.x, entity.y, 64, 64);
+                        newEntity.direction = entity.direction;
+                        newEntity.level = entity.level;
+                        newEntity.experience = entity.experience;
+                        newEntity.neededExperienceToLevel = entity.neededExperienceToLevel;
+                        newEntity.enemiesSlain = entity.enemiesSlain;
+                        newEntity.strength = entity.strength;
+                        newEntity.inventory = new Inventory(game);
+                        newEntity.stats = new Stats(game);
+                        game.hero = newEntity;
+                        
+                        items = typeof entity.items === 'undefined' ? [] : JSON.parse(entity.items);
+                        // for each of the items, we have to add them since we don't have them in Item 'form'
+                        items.forEach(function(item) {
+                            for (var i = 0; i < item.quantity; ++i) {
+                                // little hack I use here: for each of the previous items we had,
+                                // create a new gem with the same color and act as if we picked up
+                                // the gem 'quantity' times
+                                (new Gem(game, 0, 0, 0, 0, item.type.replace('_gem', ''))).pickUp(false);
+                            }
+                        });
+                        break;
+                    case 'Ogre':
+                        newEntity = new Ogre(game, entity.x, entity.y, 32, 48);
+                        break;
+                    case 'Skeleton':
+                        newEntity = new Ogre(game, entity.x, entity.y, 31, 48);
+                        break;
+                }
+                
+                if (newEntity) {
+                    newEntity.health = entity.health;
+                    game.addEntity(newEntity);
+                }
+            }
+            
+            dungeon = new Dungeon(game, game.ENEMY_PROBABILITY, game.MISC_PROBABILITY);
+            dungeon.map = map;
+            
+            numTilesX = Math.ceil(game.frameWidth / dungeon.tileSize);
+            numTilesY = Math.ceil(game.frameHeight / dungeon.tileSize); 
+                          
+            dungeon.randDungeonGen = new RandomizeDungeon(game, numTilesX, numTilesY);
+            dungeon.randDungeonGen.map = map;
+            
+            dungeon.goalTileX = parseInt(gameInfo.goalTileX, 10);
+            dungeon.goalTileY = parseInt(gameInfo.goalTileY, 10);    
+            game.dungeon = dungeon;
+            game.trackEvents();
+            game.initGameButtons();
+            game.start();
+        }); // end downloadAl
     }
 }
 
@@ -1714,33 +1818,70 @@ function saveGame() {
                     type: entity.constructor.name,
                     x: entity.x,
                     y: entity.y,
+                    direction: entity.direction,
                     level: entity.level,
+                    experience: entity.experience,
+                    neededExperienceToLevel: entity.neededExperienceToLevel,
+                    enemiesSlain: entity.enemiesSlain,
                     health: entity.health,
                     strength: entity.strength,
-                    inventory: entity.inventory
+                    items: JSON.stringify(entity.inventory.items, censor)
                 });
             } else {
                 gameObjects.push({
                     type: entity.constructor.name,
                     x: entity.x,
-                    y: entity.y
+                    y: entity.y,
+                    health: entity.health
                 });
             }
         
         }, this);
-        
+
         // store the entities
         localStorage['entities'] = JSON.stringify(gameObjects, censor);
-        console.log(game.dungeon);
         
         // save the dungeon
-        localStorage['dungeon'] = JSON.stringify(game.dungeon, censor);
+        localStorage['map'] = JSON.stringify(game.dungeon.map, censor);
         
-        // a saved game exists
+        // save important game information
+        localStorage['gameInfo'] = JSON.stringify({
+            dungeonLevel: game.dungeonLevel,
+            goalTileX: game.dungeon.goalTileX,
+            goalTileY: game.dungeon.goalTileY
+        });
+        
+        // indicate that a saved game exists
         localStorage['savedGameExists'] = true;
-        
-        console.log(localStorage['dungeon']);
     }
+}
+
+function queueAllAssets() {
+    // Download images
+    ASSET_MANAGER.queueDownload('images/fire.png');
+    ASSET_MANAGER.queueDownload('images/monsters.png');
+    ASSET_MANAGER.queueDownload('images/hero.png');
+    ASSET_MANAGER.queueDownload('images/caveTiles.png');
+    ASSET_MANAGER.queueDownload('images/health.png');
+    ASSET_MANAGER.queueDownload('images/health2.png');
+    ASSET_MANAGER.queueDownload('images/health_frame.png');
+    ASSET_MANAGER.queueDownload('images/explosion.png');
+    ASSET_MANAGER.queueDownload('images/experience_frame.png');
+    ASSET_MANAGER.queueDownload('images/experience.png');
+    // queue all of the gems
+    for (var i = 0; i < game.GEM_COLORS.length; ++i) {
+        ASSET_MANAGER.queueDownload('images/' + game.GEM_COLORS[i] + '_gem.png');
+    }
+    
+    // Download sounds
+    ASSET_MANAGER.queueSound('sounds/bump.wav');
+    ASSET_MANAGER.queueSound('sounds/itemGain.mp3');
+    ASSET_MANAGER.queueSound('sounds/levelUp.wav');
+    ASSET_MANAGER.queueSound('sounds/monster.wav');
+    ASSET_MANAGER.queueSound('sounds/monster_dying.wav');
+    ASSET_MANAGER.queueSound('sounds/punch.wav');
+    ASSET_MANAGER.queueSound('sounds/shine.wav');
+    ASSET_MANAGER.queueSound('sounds/walking.wav');
 }
     
 $(function() {
@@ -1786,22 +1927,9 @@ $(function() {
     // new game is clicked
     $('#newGame').on('click', function() {
     //window.addEventListener('load', function() {
-        var sideMargin = 0;
-    
-        $('#gameMenu, #uncLogo').hide();
-        // set canvas width to occupy the whole page
-        canvas = document.getElementById('canvas');
-    
-        $('#canvas').css('visibility', 'visible');
-        // get the correct side margins
-        sideMargin = ($(document).width() - $(canvas).width())/2;
         
-        // adjust margins (normal css margins don't work for some reason)
-        $('#canvas').css({
-            'margin-left': sideMargin,
-            'margin-right': sideMargin,
-            'margin-top': -2
-       });
+        // show the canvas
+        showCanvas();
         
         /*canvas.width = document.width;
          canvas.height = document.height;*/
@@ -1814,32 +1942,9 @@ $(function() {
     
         // update appCache if appropriate
         ASSET_MANAGER.updateAppCache();
-    
-        // Download images
-        ASSET_MANAGER.queueDownload('images/fire.png');
-        ASSET_MANAGER.queueDownload('images/monsters.png');
-        ASSET_MANAGER.queueDownload('images/hero.png');
-        ASSET_MANAGER.queueDownload('images/caveTiles.png');
-        ASSET_MANAGER.queueDownload('images/health.png');
-        ASSET_MANAGER.queueDownload('images/health2.png');
-        ASSET_MANAGER.queueDownload('images/health_frame.png');
-        ASSET_MANAGER.queueDownload('images/explosion.png');
-        ASSET_MANAGER.queueDownload('images/experience_frame.png');
-        ASSET_MANAGER.queueDownload('images/experience.png');
-        // queue all of the gems
-        for (var i = 0; i < game.GEM_COLORS.length; ++i) {
-            ASSET_MANAGER.queueDownload('images/' + game.GEM_COLORS[i] + '_gem.png');
-        }
-    
-        // Download sounds
-        ASSET_MANAGER.queueSound('sounds/bump.wav');
-        ASSET_MANAGER.queueSound('sounds/itemGain.mp3');
-        ASSET_MANAGER.queueSound('sounds/levelUp.wav');
-        ASSET_MANAGER.queueSound('sounds/monster.wav');
-        ASSET_MANAGER.queueSound('sounds/monster_dying.wav');
-        ASSET_MANAGER.queueSound('sounds/punch.wav');
-        ASSET_MANAGER.queueSound('sounds/shine.wav');
-        ASSET_MANAGER.queueSound('sounds/walking.wav');
+        
+        // queue all assets
+        queueAllAssets();
         // let the user know we are loading assets
         myAudio.say(game.voice, game.language, 'Loading, please wait');
     
@@ -1848,8 +1953,7 @@ $(function() {
             game.init();
             game.start();
             game.msgLog.log('Welcome to dungeon level ' + game.dungeonLevel);
-            $('#options').fadeIn();
-            // show the options after the loading of the assets is done
+            $('#options').fadeIn(); // show the options after the loading of the assets is done
         });
     });
 });
