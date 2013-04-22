@@ -451,7 +451,7 @@ function Hero(game, x, y, width, height) {
     this.adviceConfusedY = false; // same as above for 'north' and 'south'
     this.advice = ''; // keep track of the advice given
     // how much the hero damages the opponent
-    this.VELOCITY = 100;
+    this.VELOCITY = 500; // 100
     this.ATTACKING_RANGE = 10;
     this.RECOVERY_RATE = this.health / 1e4;
     this.VERY_LOW_HEALTH_WARNING = 20; // warn below this health
@@ -840,8 +840,10 @@ function Enemy(game, x, y, width, height) {
     this.path = [];
     // will hold the path determined by the path planner
     this.pathLastUpdated = null;
-    this.health = 75;
-    this.strength = 1e-1;
+    /*this.health = 75 + game.dungeonLevel*2;
+    this.strength = 1e-1 + game.dungeonLevel/20;*/
+    this.health = this.game ? 75 + this.game.dungeonLevel*2 : 75;
+    this.strength = this.game ? 1e-1 + game.dungeonLevel/20 : 1e-1;
     this.wandering = false;
     this.wanderingDelta = 0;  // keep track of how much it has wandered
     this.VELOCITY = 400;
@@ -1434,21 +1436,30 @@ function GameEngine(ctx) {
     // keep track of previously pressed key to avoid "sticky" keys
     this.dungeon = null;
     this.hero = null;
+    this.dungeonLevel = 1; // keep track of how many dungeons we have completed
     // keep track of the hero for path planning purposes
     this.voice = 'child';
     this.language = 'en';
     this.msgLog = new MessageLog(this.voice, this.language);
     this.HERO_STARTX = 50;
     this.HERO_STARTY = this.frameHeight - 96;
-    this.ENEMY_PROBABILITY = 0; // 5e-2; 2e-2
+    this.ENEMY_PROBABILITY = 1e-2 + this.dungeonLevel/1e2; // 5e-2; 2e-2
     this.MISC_PROBABILITY = 0; 
     this.GEM_COLORS = ['blue', 'green', 'red']; // 5e-3
 }
 
 // function to restart the game
-GameEngine.prototype.restartGame = function() {
+GameEngine.prototype.restartGame = function(newHero, isGameOver) {
     cancelRequestAnimationFrame(animFrame);
-    myAudio.say(this.voice, this.language, 'Game over');
+    newHero = typeof newHero === 'undefined' ? true: newHero;
+    isGameOver = typeof isGameOver === 'undefined' ? true : isGameOver;
+    if (isGameOver) {
+        this.dungeonLevel = 1;
+        myAudio.say(this.voice, this.language, 'Game over');
+    } else {
+        myAudio.say(this.voice, this.language, 'Congratulations, you have completed dungeon level ' + this.dungeonLevel);
+    }
+    
     var ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
@@ -1462,13 +1473,22 @@ GameEngine.prototype.restartGame = function() {
     
     this.entities = [];
     this.dungeon.generateDungeon();
-    this.initHero();
+    // generate a new hero if specified (default is true)
+    if (newHero) {
+        this.initHero();
+    } else {
+        // if we are not replacing the current hero, add back the current one and set its start position
+        this.addEntity(this.hero);
+        this.hero.x = this.HERO_STARTX;
+        this.hero.y = this.HERO_STARTY;
+    }
     gameOver = false;
 }
 
 GameEngine.prototype.initNextLevel = function() {
-    // make the enemies stronger and restart game
-    
+    ++this.dungeonLevel; // increase dungeon level
+    levelComplete = false;
+    this.restartGame(false, false);
 }
 
 GameEngine.prototype.addEntity = function(entity) {
@@ -1508,7 +1528,7 @@ GameEngine.prototype.draw = function() {
 GameEngine.prototype.update = function() {
     for (var i = 0; i < this.entities.length; ++i) {
         // stop iterating if game is over
-        if (gameOver) { 
+        if (gameOver || levelComplete) { 
             break;
         }
         
