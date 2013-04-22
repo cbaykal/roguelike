@@ -64,8 +64,14 @@ Gary Bishop January 2012
             AudioPlayer.close('flashplayer'); // this may not work
         }
     }
-
+    
+    function getAudio() {
+        console.log(audio);
+        return audio;
+    }
+    
     window.myAudio = {
+        getAudio: getAudio,
         initialize: initialize,
         speechUrl: speechUrl,
         say: say,

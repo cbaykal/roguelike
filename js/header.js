@@ -447,6 +447,7 @@ function Hero(game, x, y, width, height) {
     this.strength = 1;
     this.warnedLowHealth = false;
     this.warnedVeryLowHealth = false;
+    this.tellingDirection = false;
     // how much the hero damages the opponent
     this.VELOCITY = 100;
     this.ATTACKING_RANGE = 10;
@@ -586,6 +587,36 @@ Hero.prototype.isAtGoal = function() {
     }
 }
 
+// tell the player where to go
+Hero.prototype.sayDirection = function() {
+    // use A* path planning to find the correct way to go
+    var planner = new PathFinder(this.game, this,
+                         new Goal(this.game.dungeon.randDungeonGen, this.game, this.game.dungeon.goalTileX*this.game.dungeon.tileSize,
+                                  this.game.dungeon.goalTileY*this.game.dungeon.tileSize)),
+        path = planner.findPath(),  // the whole path
+        next = path[1], // the next tile to go to
+        currentTileX = Math.floor(this.x/this.game.dungeon.tileSize),
+        currentTileY = Math.floor(this.y/this.game.dungeon.tileSize),
+        dx = next.x - currentTileX,
+        dy = next.y - currentTileY,
+        direction = ''; // will hold the direction string
+    
+    // there is a change in x
+    if (dx !== 0) {
+        direction = dx < 0 ? 'west' : 'east';
+    } else if (dy !== 0) {
+        direction = dy < 0 ? 'north' : 'south';
+    }
+    
+    var that = this;
+    // tell the player the correct direction to go
+    myAudio.say('female', 'en', 'Go ' + direction);
+    myAudio.getAudio().addEventListener('ended', function() {
+        that.tellingDirection = false;
+    }, false);
+    
+}
+
 Hero.prototype.update = function() {
     if (this.health <= 0) {
         this.alive = false;
@@ -676,6 +707,13 @@ Hero.prototype.update = function() {
             this.attackingDirection = this.direction === 'punch' ? this.attackingDirection : this.direction;
             this.direction = 'punch';
             this.emitSound('sounds/punch.wav');
+            break;
+        case 72: // h for help
+            // tell the user via speech where to go
+            if (!this.tellingDirection) {
+                this.tellingDirection = true;
+                this.sayDirection();
+            }
             break;
         default:
             this.game.key = null;
@@ -876,11 +914,10 @@ Enemy.prototype.getDirection = function() {
     if (!this.path || !this.pathLastUpdated || (this.game.now - this.pathLastUpdated) >= timerDelta) {
         var planner = new PathFinder(this.game, this.game.hero, this),
             foundPath = planner.findPath();
-        console.log('forcing path find');
+       // console.log('forcing path find');
         // update the path if there were no errors in finding it
         this.path = (foundPath || !this.path) ? foundPath : this.path;
-        this.pathLastUpdated = this.game.now;
-        // record the last updated time
+        this.pathLastUpdated = this.game.now; // record the last updated time
     }
 
     // if we are not at the goal position, we need to find the next step on our path to hero
@@ -1179,10 +1216,10 @@ Dungeon.prototype.generateDungeon = function() {
     this.goalTileY = 0;
     
     // generate a completely randomized dungeon
-    var dCreator = new RandomizeDungeon(this.game, numTilesX, numTilesY);
-    this.map = dCreator.generateDungeon(this.goalTileX, this.goalTileY, 
-                               Math.floor(this.game.HERO_STARTX/this.tileSize),
-                               Math.floor(this.game.HERO_STARTY/this.tileSize));
+    this.randDungeonGen = new RandomizeDungeon(this.game, numTilesX, numTilesY);
+    this.map = this.randDungeonGen.generateDungeon(this.goalTileX, this.goalTileY, 
+                                                    Math.floor(this.game.HERO_STARTX/this.tileSize),
+                                                    Math.floor(this.game.HERO_STARTY/this.tileSize));
   //  console.log('map done');
     // also make the tile to the left of the goal tile a free space
     this.map[this.goalTileX - 1][this.goalTileY].type = 'F';
@@ -1505,7 +1542,7 @@ GameEngine.prototype.start = function() {
 
 // returns whether the key pressed is a key used in the game
 GameEngine.prototype.isGameKey = function(key) {
-    if (key >= 37 && key <= 40 || key === 32 || key === 87 || key === 65 || key === 83 || key === 68) {
+    if (key >= 37 && key <= 40 || key === 32 || key === 87 || key === 65 || key === 83 || key === 68 || key === 72) {
         return true;
     }
 
