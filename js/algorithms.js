@@ -137,7 +137,7 @@ PathFinder.prototype.getNeighboringNodes = function(node) {
             newY = node.y + direction[1];
             
         // check to see whether the path is clear
-       if(this.goal.isPathClear(newX*this.game.dungeon.tileSize, newY*this.game.dungeon.tileSize, false, false, false) ||
+       if(this.goal.isPathClear(newX*this.game.dungeon.tileSize, newY*this.game.dungeon.tileSize, true, false, false) ||
             this.isNearGoal(newX, newY)) {
                 
             if (this.isNearGoal(newX, newY)) {

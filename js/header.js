@@ -434,8 +434,8 @@ function Hero(game, x, y, width, height) {
     // this is a constant, it won't be changed regardless of the direction
     this.offsetY = 518;
     // this will change depending on the direction; 518 is for the sprite in going in the upward direction (default)
-    this.scaleToX = 38
-    this.scaleToY = 42;
+    this.scaleToX = 38; // 38
+    this.scaleToY = 42; // 42
     this.direction = 'up';
     this.experience = 0;
     this.neededExperienceToLevel = 100;
@@ -597,24 +597,45 @@ Hero.prototype.sayDirection = function() {
         next = path[1], // the next tile to go to
         currentTileX = Math.floor(this.x/this.game.dungeon.tileSize),
         currentTileY = Math.floor(this.y/this.game.dungeon.tileSize),
-        dx = next.x - currentTileX,
-        dy = next.y - currentTileY,
-        direction = ''; // will hold the direction string
+        rand = Math.random(),
+        that = this,
+        advice = '';
+        
+    // get the advice
+    advice = this.getAdvice(path, 1, currentTileX, currentTileY, null);
     
-    // there is a change in x
-    if (dx !== 0) {
-        direction = dx < 0 ? 'west' : 'east';
-    } else if (dy !== 0) {
-        direction = dy < 0 ? 'north' : 'south';
-    }
-    
-    var that = this;
     // tell the player the correct direction to go
-    myAudio.say('female', 'en', 'Go ' + direction);
+    myAudio.say('child', 'en', advice + '.');
     myAudio.getAudio().addEventListener('ended', function() {
         that.tellingDirection = false;
     }, false);
     
+}
+
+// recursive function to get the correct advice with respect to where to move next
+Hero.prototype.getAdvice = function(path, indexToConsider, currentTileX, currentTileY, failedAdvice) {
+    var next = path[indexToConsider],
+        dx = next.x - currentTileX,
+        dy = next.y - currentTileY,
+        advice = 'Go ';
+        
+    if (dy !== 0) {
+        advice += dy < 0 ? 'north' : 'south';
+    } else if (dx !== 0) {
+        advice += dx < 0 ? 'west' : 'east';
+    } else {
+        advice = 'You are on the right track';
+    }
+    
+    // either the next tile is blocked or we are giving the same bad advice,
+    // so consider the subsequent tile in the path to the goal 
+    if (!this.isPathClear(next.x*this.game.dungeon.tileSize, next.y*this.game.dungeon.tileSize, true, false, false) ||
+        (failedAdvice && failedAdvice === advice)) {
+        console.log('advice failed');
+        return this.getAdvice(path, ++indexToConsider, currentTileX, currentTileY, advice);
+    }
+    
+    return advice;
 }
 
 Hero.prototype.update = function() {
@@ -647,7 +668,7 @@ Hero.prototype.update = function() {
         // up arrow
         case 87:
             // 'W'
-            if (this.isPathClear(this.x, this.y - delta, true)) {
+            if (this.isPathClear(this.x, this.y - delta)) {
                 this.y -= delta;
                 this.emitSound('sounds/walking.wav');
             } else {
@@ -661,7 +682,7 @@ Hero.prototype.update = function() {
         // down arrow
         case 83:
             // 'S'
-            if (this.isPathClear(this.x, this.y + delta, true)) {
+            if (this.isPathClear(this.x, this.y + delta)) {
                 this.y += delta;
                 this.emitSound('sounds/walking.wav');
             } else {
@@ -675,7 +696,7 @@ Hero.prototype.update = function() {
         // left
         case 65:
             // 'A'
-            if (this.isPathClear(this.x - delta, this.y, true)) {
+            if (this.isPathClear(this.x - delta, this.y)) {
                 this.x -= delta;
                 this.emitSound('sounds/walking.wav');
             } else {
@@ -689,7 +710,7 @@ Hero.prototype.update = function() {
         // right
         case 68:
             // 'D'
-            if (this.isPathClear(this.x + delta, this.y, true)) {
+            if (this.isPathClear(this.x + delta, this.y)) {
                 this.x += delta;
                 this.emitSound('sounds/walking.wav');
             } else {
@@ -1016,10 +1037,8 @@ function Ogre(game, x, y, width, height) {
     this.offsetX = 0;
     this.offsetY = 13;
     this.baseOffsetY = 13;
-    this.scaleToX = 24;
-    // 32
-    this.scaleToY = 24;
-    // 38
+    this.scaleToX = 24; // 32
+    this.scaleToY = 24; // 38
     this.VELOCITY = 35;
     this.DISTANCE_THRESHOLD = 150; // if the hero is within this distance, attack him
     this.SOUND_DIST_THRESHOLD = 200;
@@ -1042,7 +1061,7 @@ function Skeleton(game, x, y, width, height) {
     this.baseOffsetY = 13;
     this.scaleToX = 24;
     this.scaleToY = 24;
-    this.VELOCITY = 3;
+    this.VELOCITY = 35;
     this.DISTANCE_THRESHOLD = 150;
     this.SOUND_DIST_THRESHOLD = 200;
 }
