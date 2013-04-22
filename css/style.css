@@ -15,6 +15,7 @@ html {
 }
 
 #canvas {
+	visibility: hidden;
 	display: block;
 	padding: 0;
 	margin: 1px auto;
@@ -89,6 +90,55 @@ html {
 #statsDialog, #inventoryDialog, #messagesDialog {
 	display: none;
 }
+
+#gameMenu {
+	width: 600px;
+	margin: 30px auto;
+	padding: 0;
+	list-style: none;
+	box-shadow: 1px 1px 1px #56A0D3;
+	border: 2px solid #666;
+	border-radius: 5px;
+	background: #56A0D3; 
+    background: -webkit-gradient(linear, top, bottom, from(#56A0D3), to(#286DA3));
+    background: -webkit-linear-gradient(top, #56A0D3, #286DA3);
+    background: -moz-linear-gradient(top, #56A0D3, #286DA3); 
+    background: -ms-linear-gradient(top, #56A0D3, #286DA3); 
+    background: -o-linear-gradient(top, #56A0D3, #286DA3); 
+    background: linear-gradient(top, #56A0D3, #286DA3);
+}
+
+#gameMenu li {
+	-webkit-box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	height: auto;
+	border-bottom: 1px solid #fff;
+}
+
+#gameMenu li:last-child {
+	border-bottom: none;
+}
+
+#gameMenu li a {
+	display: inline-block;
+	-webkit-box-sizing: border-box;
+	cursor: pointer;
+	margin: 0;
+	padding: 0;
+	padding-left: 5px;
+	width: 100%;
+	color: white;
+	text-decoration: none;
+	font-size: 42px;
+}
+
+#gameMenu li a:hover, #gameMenu li a:focus {
+	color: #56A0D3;
+	background: #fff;
+}
+
 
 /*#options button {
 	cursor: pointer;

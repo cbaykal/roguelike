@@ -56,6 +56,7 @@ Stats.prototype.init = function() {
     this.$experience = this.$dialog.find('#experience');
     this.$level = this.$dialog.find('#level');
     this.$strength = this.$dialog.find('#strength');
+    this.$dungeonLevel = this.$dialog.find('#dungeonLevel');
     //this.$defense = this.$dialog.find('#defense');
     this.$enemiesSlain = this.$dialog.find('#enemiesSlain');
 }
@@ -66,6 +67,7 @@ Stats.prototype.getSpeechString = function() {
                  'Experience: ' + this.$experience.text() + ', ' +
                  'Level: ' + this.$level.text() + ', ' +
                  'Strength: ' + this.$strength.text() + ', ' +
+                 'Dungeon Level: ' + this.$dungeonLevel.text() + ', ' + 
                  'Enemies slain: ' + this.$enemiesSlain.text() + '.';
                  
     return this.parseString(string);
@@ -98,6 +100,7 @@ Stats.prototype.update = function() {
     this.$experience.text(hero.experience + '/' + Math.round(hero.neededExperienceToLevel));
     this.$level.text(hero.level);
     this.$strength.text(hero.strength);
+    this.$dungeonLevel.text(hero.game.dungeonLevel);
     //this.$defense.text(hero.defense);
     this.$enemiesSlain.text(hero.enemiesSlain);
 }

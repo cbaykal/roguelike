@@ -451,7 +451,7 @@ function Hero(game, x, y, width, height) {
     this.adviceConfusedY = false; // same as above for 'north' and 'south'
     this.advice = ''; // keep track of the advice given
     // how much the hero damages the opponent
-    this.VELOCITY = 500; // 100
+    this.VELOCITY = 100; // 100
     this.ATTACKING_RANGE = 10;
     this.RECOVERY_RATE = this.health / 1e4;
     this.VERY_LOW_HEALTH_WARNING = 20; // warn below this health
@@ -1457,7 +1457,7 @@ GameEngine.prototype.restartGame = function(newHero, isGameOver) {
         this.dungeonLevel = 1;
         myAudio.say(this.voice, this.language, 'Game over');
     } else {
-        myAudio.say(this.voice, this.language, 'Congratulations, you have completed dungeon level ' + this.dungeonLevel);
+        myAudio.say(this.voice, this.language, 'Congratulations, you have completed dungeon level ' + (this.dungeonLevel - 1));
     }
     
     var ctx = canvas.getContext('2d');
@@ -1662,9 +1662,11 @@ GameEngine.prototype.getLoadingScreen = function() {
 }
 
 GameEngine.prototype.initGameButtons = function() {
-    var $div = $('#options'), $canvas = $('#canvas'), that = this, xOffset = -40, yOffset = -(this.dungeon.tileSize * 2 - $div.height()) / 2;
-    // center the buttons vertically
-
+    var $div = $('#options'), 
+        $canvas = $('#canvas'),
+        that = this,
+        xOffset = -40, 
+        yOffset = -(this.dungeon.tileSize * 2 - $div.height()) / 2;// center the buttons vertically
     // place the buttons to the lower right of the canvas
     $div.css({
         left : $canvas.offset().left + $canvas.width() - $div.width() + xOffset,
@@ -1678,11 +1680,43 @@ var ASSET_MANAGER = new AssetManager(),
     gameOver,
     levelComplete = false,
     animFrame;
-
-window.addEventListener('load', function() {
-
+    
+$(function() {
+    // initialize myAudio object for text to speech use
+    myAudio.initialize();
+    myAudio.say('child', 'en', 'Welcome to Roguelike! Press TAB to navigate menu');
+    var $gameLinks = $('#gameMenu').find('a');
+    $gameLinks.on('focus', function() {
+        myAudio.say('child', 'en', $(this).text());
+    });
+    
+    $gameLinks.on('keyup', function(e) {
+        var keyCode = e.keyCode || e.which;
+        // if enter is pressed, treat it as a click
+        if (keyCode === 13) {
+            $(this).click();
+            e.preventDefault();
+        }
+    });
+    
+$('#newGame').on('click', function() {
+//window.addEventListener('load', function() {
+    var sideMargin = 0;
+    
+    $('#gameMenu').hide();
     // set canvas width to occupy the whole page
     canvas = document.getElementById('canvas');
+
+    $('#canvas').css('visibility', 'visible');
+    // get the correct side margins
+    sideMargin = ($(document).width() - $(canvas).width())/2;
+    
+    $('#canvas').css({
+        'margin-left': sideMargin,
+        'margin-right': sideMargin,
+        'margin-top': -2
+   }).slideDown(600);
+    
     /*canvas.width = document.width;
      canvas.height = document.height;*/
 
@@ -1720,9 +1754,6 @@ window.addEventListener('load', function() {
     ASSET_MANAGER.queueSound('sounds/punch.wav');
     ASSET_MANAGER.queueSound('sounds/shine.wav');
     ASSET_MANAGER.queueSound('sounds/walking.wav');
-
-    // initialize myAudio object for text to speech use
-    myAudio.initialize();
     // let the user know we are loading assets
     myAudio.say(game.voice, game.language, 'Loading, please wait');
 
@@ -1730,8 +1761,11 @@ window.addEventListener('load', function() {
         console.log('All assets have been loaded succesfully.');
         game.init();
         game.start();
-        game.msgLog.log('Welcome to Roguelike!');
+        game.msgLog.log('Welcome to dungeon level ' + game.dungeonLevel);
         $('#options').fadeIn();
         // show the options after the loading of the assets is done
     });
-}, false);
+//}, false);
+});
+
+});

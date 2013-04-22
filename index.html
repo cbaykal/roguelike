@@ -24,6 +24,11 @@
 		<script src="js/header.js"></script>
 	</head>
 	<body>
+		<ul id="gameMenu">
+			<li><a tabindex="1" id="newGame">New Game</a></li>
+			<li><a tabindex="2" id="loadGame">Load Game</a></li>
+			<li><a tabindex="3" id="settings">Settings</a></li>
+		</ul>
 		<canvas id="canvas" height="648" width="1200"></canvas>
 		<div class="gameDialog" id="options">
 			<button id="stats">Statistics</button>
@@ -36,6 +41,7 @@
 			<p>Experience: <span id="experience"></span></p>
 			<p>Level: <span id="level"></span></p>
 			<p>Strength: <span id="strength"></span></p>
+			<p>Dungeon Level: <span id="dungeonLevel"></span></p>
 			<!--<p>Defense: <span id="defense"></span></p>-->
 			<p>Enemies Slain: <span id="enemiesSlain"></span></p>
 		</div>
