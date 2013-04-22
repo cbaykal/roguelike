@@ -1438,8 +1438,8 @@ function GameEngine(ctx) {
     this.hero = null;
     this.dungeonLevel = 1; // keep track of how many dungeons we have completed
     // keep track of the hero for path planning purposes
-    this.voice = 'child';
-    this.language = 'en';
+    this.voice = voice;
+    this.language = language;
     this.msgLog = new MessageLog(this.voice, this.language);
     this.HERO_STARTX = 50;
     this.HERO_STARTY = this.frameHeight - 96;
@@ -1672,24 +1672,92 @@ GameEngine.prototype.initGameButtons = function() {
         left : $canvas.offset().left + $canvas.width() - $div.width() + xOffset,
         top : $canvas.offset().top + $canvas.height() - $div.height() + yOffset,
     });
-
 }
+
 var ASSET_MANAGER = new AssetManager(), 
     canvas, 
     game, 
     gameOver,
+    voice = 'child',
+    language = 'en',
     levelComplete = false,
     animFrame;
+    
+// these keys cause circular reference in JSON.stringify, so avoid them
+function censor(key, value) {
+    if (key === 'game' || key === '$dialog' || key === 'randDungeonGen' || key === 'tile') {
+        console.log('returning undefined');
+        return undefined;
+    }
+    return value;
+}
+    
+// global function for loading the game
+function loadGame() {
+    if (localStorage && localStorage['savedGameExists'] === 'true') {
+        console.log(JSON.parse(localStorage['entities']));
+    }
+}
+
+// global function for loading the game
+function saveGame() {
+    // all we need to do is save the entities
+    if (!localStorage) {
+        alert('Your browser does not support localStorage');
+    } else {
+        var gameObjects = [];
+        
+        // iterate through the objects and store important info 
+        game.entities.forEach(function(entity, index) {
+            if (entity.constructor.name === 'Hero') {
+                gameObjects.push({
+                    type: entity.constructor.name,
+                    x: entity.x,
+                    y: entity.y,
+                    level: entity.level,
+                    health: entity.health,
+                    strength: entity.strength,
+                    inventory: entity.inventory
+                });
+            } else {
+                gameObjects.push({
+                    type: entity.constructor.name,
+                    x: entity.x,
+                    y: entity.y
+                });
+            }
+        
+        }, this);
+        
+        // store the entities
+        localStorage['entities'] = JSON.stringify(gameObjects, censor);
+        console.log(game.dungeon);
+        
+        // save the dungeon
+        localStorage['dungeon'] = JSON.stringify(game.dungeon, censor);
+        
+        // a saved game exists
+        localStorage['savedGameExists'] = true;
+        
+        console.log(localStorage['dungeon']);
+    }
+}
     
 $(function() {
     // initialize myAudio object for text to speech use
     myAudio.initialize();
-    myAudio.say('child', 'en', 'Welcome to Roguelike! Press TAB to navigate menu');
-    var $gameLinks = $('#gameMenu').find('a');
+    myAudio.say(voice, language, 'Welcome to Roguelike, press TAB to navigate menu');
+    
+    // game menu code
+    var $gameLinks = $('#gameMenu').find('a'),
+        $saveGame = $('#saveGame');
+    
+    // tell the user via speech the text on the button on focus
     $gameLinks.on('focus', function() {
-        myAudio.say('child', 'en', $(this).text());
+        myAudio.say(voice, language, $(this).text());
     });
     
+    // allow the player to press enter on any game menu to imitate clicking on it
     $gameLinks.on('keyup', function(e) {
         var keyCode = e.keyCode || e.which;
         // if enter is pressed, treat it as a click
@@ -1699,73 +1767,89 @@ $(function() {
         }
     });
     
-$('#newGame').on('click', function() {
-//window.addEventListener('load', function() {
-    var sideMargin = 0;
-    
-    $('#gameMenu').hide();
-    // set canvas width to occupy the whole page
-    canvas = document.getElementById('canvas');
-
-    $('#canvas').css('visibility', 'visible');
-    // get the correct side margins
-    sideMargin = ($(document).width() - $(canvas).width())/2;
-    
-    $('#canvas').css({
-        'margin-left': sideMargin,
-        'margin-right': sideMargin,
-        'margin-top': -2
-   }).slideDown(600);
-    
-    /*canvas.width = document.width;
-     canvas.height = document.height;*/
-
-    game = new GameEngine(canvas.getContext('2d'));
-    var lCanv = game.getLoadingScreen();
-
-    // display the loading screen while we load assets
-    game.ctx.drawImage(lCanv, (game.frameWidth - lCanv.width) / 2, (game.frameHeight - lCanv.height) / 2);
-
-    // update appCache if appropriate
-    ASSET_MANAGER.updateAppCache();
-
-    // Download images
-    ASSET_MANAGER.queueDownload('images/fire.png');
-    ASSET_MANAGER.queueDownload('images/monsters.png');
-    ASSET_MANAGER.queueDownload('images/hero.png');
-    ASSET_MANAGER.queueDownload('images/caveTiles.png');
-    ASSET_MANAGER.queueDownload('images/health.png');
-    ASSET_MANAGER.queueDownload('images/health2.png');
-    ASSET_MANAGER.queueDownload('images/health_frame.png');
-    ASSET_MANAGER.queueDownload('images/explosion.png');
-    ASSET_MANAGER.queueDownload('images/experience_frame.png');
-    ASSET_MANAGER.queueDownload('images/experience.png');
-    // queue all of the gems
-    for (var i = 0; i < game.GEM_COLORS.length; ++i) {
-        ASSET_MANAGER.queueDownload('images/' + game.GEM_COLORS[i] + '_gem.png');
-    }
-
-    // Download sounds
-    ASSET_MANAGER.queueSound('sounds/bump.wav');
-    ASSET_MANAGER.queueSound('sounds/itemGain.mp3');
-    ASSET_MANAGER.queueSound('sounds/levelUp.wav');
-    ASSET_MANAGER.queueSound('sounds/monster.wav');
-    ASSET_MANAGER.queueSound('sounds/monster_dying.wav');
-    ASSET_MANAGER.queueSound('sounds/punch.wav');
-    ASSET_MANAGER.queueSound('sounds/shine.wav');
-    ASSET_MANAGER.queueSound('sounds/walking.wav');
-    // let the user know we are loading assets
-    myAudio.say(game.voice, game.language, 'Loading, please wait');
-
-    ASSET_MANAGER.downloadAll(game, function() {
-        console.log('All assets have been loaded succesfully.');
-        game.init();
-        game.start();
-        game.msgLog.log('Welcome to dungeon level ' + game.dungeonLevel);
-        $('#options').fadeIn();
-        // show the options after the loading of the assets is done
+    // initialize the save game button
+    $saveGame.button().on('click', function() {
+        if (game) {
+            saveGame();
+        }
     });
-//}, false);
-});
-
+    
+    // say the name of the button on focus
+    $saveGame.on('focus', function() {
+        myAudio.say(voice, language, $(this).text());
+    });
+    
+    $('#loadGame').on('click', function() {
+        loadGame();
+    });
+    
+    // new game is clicked
+    $('#newGame').on('click', function() {
+    //window.addEventListener('load', function() {
+        var sideMargin = 0;
+    
+        $('#gameMenu, #uncLogo').hide();
+        // set canvas width to occupy the whole page
+        canvas = document.getElementById('canvas');
+    
+        $('#canvas').css('visibility', 'visible');
+        // get the correct side margins
+        sideMargin = ($(document).width() - $(canvas).width())/2;
+        
+        // adjust margins (normal css margins don't work for some reason)
+        $('#canvas').css({
+            'margin-left': sideMargin,
+            'margin-right': sideMargin,
+            'margin-top': -2
+       });
+        
+        /*canvas.width = document.width;
+         canvas.height = document.height;*/
+    
+        game = new GameEngine(canvas.getContext('2d'));
+        var lCanv = game.getLoadingScreen();
+    
+        // display the loading screen while we load assets
+        game.ctx.drawImage(lCanv, (game.frameWidth - lCanv.width) / 2, (game.frameHeight - lCanv.height) / 2);
+    
+        // update appCache if appropriate
+        ASSET_MANAGER.updateAppCache();
+    
+        // Download images
+        ASSET_MANAGER.queueDownload('images/fire.png');
+        ASSET_MANAGER.queueDownload('images/monsters.png');
+        ASSET_MANAGER.queueDownload('images/hero.png');
+        ASSET_MANAGER.queueDownload('images/caveTiles.png');
+        ASSET_MANAGER.queueDownload('images/health.png');
+        ASSET_MANAGER.queueDownload('images/health2.png');
+        ASSET_MANAGER.queueDownload('images/health_frame.png');
+        ASSET_MANAGER.queueDownload('images/explosion.png');
+        ASSET_MANAGER.queueDownload('images/experience_frame.png');
+        ASSET_MANAGER.queueDownload('images/experience.png');
+        // queue all of the gems
+        for (var i = 0; i < game.GEM_COLORS.length; ++i) {
+            ASSET_MANAGER.queueDownload('images/' + game.GEM_COLORS[i] + '_gem.png');
+        }
+    
+        // Download sounds
+        ASSET_MANAGER.queueSound('sounds/bump.wav');
+        ASSET_MANAGER.queueSound('sounds/itemGain.mp3');
+        ASSET_MANAGER.queueSound('sounds/levelUp.wav');
+        ASSET_MANAGER.queueSound('sounds/monster.wav');
+        ASSET_MANAGER.queueSound('sounds/monster_dying.wav');
+        ASSET_MANAGER.queueSound('sounds/punch.wav');
+        ASSET_MANAGER.queueSound('sounds/shine.wav');
+        ASSET_MANAGER.queueSound('sounds/walking.wav');
+        // let the user know we are loading assets
+        myAudio.say(game.voice, game.language, 'Loading, please wait');
+    
+        ASSET_MANAGER.downloadAll(game, function() {
+            console.log('All assets have been loaded succesfully.');
+            game.init();
+            game.start();
+            game.msgLog.log('Welcome to dungeon level ' + game.dungeonLevel);
+            $('#options').fadeIn();
+            // show the options after the loading of the assets is done
+        });
+    });
 });

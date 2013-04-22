@@ -91,9 +91,14 @@ html {
 	display: none;
 }
 
+#uncLogo {
+	display: block;
+	margin: 10px auto;
+}
+
 #gameMenu {
-	width: 600px;
-	margin: 30px auto;
+	width: 400px;
+	margin: 5px auto;
 	padding: 0;
 	list-style: none;
 	box-shadow: 1px 1px 1px #56A0D3;
@@ -131,6 +136,7 @@ html {
 	width: 100%;
 	color: white;
 	text-decoration: none;
+	text-align: center;
 	font-size: 42px;
 }
 
