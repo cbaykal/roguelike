@@ -587,6 +587,7 @@ Hero.prototype.isAtGoal = function() {
     if (goalRect.isIntersecting(heroRect)) {
         levelComplete = true;
     }
+   
 }
 
 // tell the player where to go
@@ -658,8 +659,8 @@ Hero.prototype.getAdvice = function(path, indexToConsider, currentTileX, current
     // if we keep giving conflicting advice i.e. go north, then go south, then go north again, we have to change the direction
     this.adviceConfusedX = (fAdv === 'west' && ffAdv === 'east') || 
                            (fAdv === 'east' && ffAdv === 'west') ? true : false;
-    this.adviceConfusedY = (fAdv=== 'north' && ffAdv === 'south') ||
-                           (fAdv=== 'south' && ffAdv === 'north') ? true : false;
+    this.adviceConfusedY = (fAdv === 'north' && ffAdv === 'south') ||
+                           (fAdv === 'south' && ffAdv === 'north') ? true : false;
                            
     console.log(this.adviceConfusedX, this.adviceConfusedY);
     // either the next tile is blocked or we are giving the same bad advice,
@@ -1474,6 +1475,10 @@ GameEngine.prototype.restartGame = function(newHero, isGameOver) {
         }
     }, this);
     
+    if (levelComplete) {
+        game.hero.emitSound('sounds/level_complete.wav');
+    }
+    
     this.entities = [];
     this.dungeon.generateDungeon();
     // generate a new hero if specified (default is true)
@@ -1482,6 +1487,7 @@ GameEngine.prototype.restartGame = function(newHero, isGameOver) {
     } else {
         // if we are not replacing the current hero, add back the current one and set its start position
         this.addEntity(this.hero);
+        this.hero.health = 100; // start the level at full health
         this.hero.x = this.HERO_STARTX;
         this.hero.y = this.HERO_STARTY;
     }
@@ -1490,8 +1496,8 @@ GameEngine.prototype.restartGame = function(newHero, isGameOver) {
 
 GameEngine.prototype.initNextLevel = function() {
     ++this.dungeonLevel; // increase dungeon level
-    levelComplete = false;
     this.restartGame(false, false);
+    levelComplete = false;
 }
 
 GameEngine.prototype.addEntity = function(entity) {
@@ -1621,7 +1627,7 @@ GameEngine.prototype.start = function() {
 
 // returns whether the key pressed is a key used in the game
 GameEngine.prototype.isGameKey = function(key) {
-    if (key >= 37 && key <= 40 || key === 32 || key === 87 || key === 65 || key === 83 || key === 68 || key === 72) {
+    if (gameKeys.indexOf(key) !== -1) {
         return true;
     }
 
@@ -1637,6 +1643,9 @@ GameEngine.prototype.trackEvents = function() {
         // if it is a game key, prevent default
         if (that.isGameKey(that.key)) {
             e.preventDefault();
+        } else if (65 <= that.key && that.key <= 97){
+            // if the key pressed was not a game key, then tell the user what they pressed
+            myAudio.say(this.voice, this.language, String.fromCharCode(that.key));
         }
 
     }, false);
@@ -1680,12 +1689,13 @@ GameEngine.prototype.initGameButtons = function() {
 
 var ASSET_MANAGER = new AssetManager(), 
     canvas, 
-    game, 
+    game,
     gameOver,
     voice = 'child',
     language = 'en',
     levelComplete = false,
-    animFrame;
+    animFrame,
+    gameKeys = [37, 40, 32, 87, 65, 83, 68, 72];
     
 // these keys cause circular reference in JSON.stringify, so avoid them
 function censor(key, value) {
@@ -1799,61 +1809,61 @@ function loadGame() {
             game.trackEvents();
             game.initGameButtons();
             game.start();
-        }); // end downloadAl
+            
+            // indicate success
+            game.msgLog.log('Game loaded, welcome back to dungeon level ' + game.dungeonLevel);
+        }); // end downloadAll
     }
 }
 
-// global function for loading the game
+// global function for saving the game
 function saveGame() {
-    // all we need to do is save the entities
-    if (!localStorage) {
-        alert('Your browser does not support localStorage');
-    } else {
-        var gameObjects = [];
+    var gameObjects = [];
         
-        // iterate through the objects and store important info 
-        game.entities.forEach(function(entity, index) {
-            if (entity.constructor.name === 'Hero') {
-                gameObjects.push({
-                    type: entity.constructor.name,
-                    x: entity.x,
-                    y: entity.y,
-                    direction: entity.direction,
-                    level: entity.level,
-                    experience: entity.experience,
-                    neededExperienceToLevel: entity.neededExperienceToLevel,
-                    enemiesSlain: entity.enemiesSlain,
-                    health: entity.health,
-                    strength: entity.strength,
-                    items: JSON.stringify(entity.inventory.items, censor)
-                });
-            } else {
-                gameObjects.push({
-                    type: entity.constructor.name,
-                    x: entity.x,
-                    y: entity.y,
-                    health: entity.health
-                });
-            }
-        
-        }, this);
+    // iterate through the objects and store important info 
+    game.entities.forEach(function(entity, index) {
+        if (entity.constructor.name === 'Hero') {
+            gameObjects.push({
+                type: entity.constructor.name,
+                x: entity.x,
+                y: entity.y,
+                direction: entity.direction,
+                level: entity.level,
+                experience: entity.experience,
+                neededExperienceToLevel: entity.neededExperienceToLevel,
+                enemiesSlain: entity.enemiesSlain,
+                health: entity.health,
+                strength: entity.strength,
+                items: JSON.stringify(entity.inventory.items, censor)
+            });
+         } else {
+            gameObjects.push({
+                type: entity.constructor.name,
+                x: entity.x,
+                y: entity.y,
+                health: entity.health
+            });
+         }
+    }, this);
 
-        // store the entities
-        localStorage['entities'] = JSON.stringify(gameObjects, censor);
+    // store the entities
+    localStorage['entities'] = JSON.stringify(gameObjects, censor);
         
-        // save the dungeon
-        localStorage['map'] = JSON.stringify(game.dungeon.map, censor);
+    // save the dungeon
+    localStorage['map'] = JSON.stringify(game.dungeon.map, censor);
         
-        // save important game information
-        localStorage['gameInfo'] = JSON.stringify({
-            dungeonLevel: game.dungeonLevel,
-            goalTileX: game.dungeon.goalTileX,
-            goalTileY: game.dungeon.goalTileY
-        });
+    // save important game information
+    localStorage['gameInfo'] = JSON.stringify({
+        dungeonLevel: game.dungeonLevel,
+        goalTileX: game.dungeon.goalTileX,
+        goalTileY: game.dungeon.goalTileY
+    });
         
-        // indicate that a saved game exists
-        localStorage['savedGameExists'] = true;
-    }
+    // indicate that a saved game exists
+    localStorage['savedGameExists'] = true;
+        
+    // indicate success
+    game.msgLog.log('Saved game');
 }
 
 function queueAllAssets() {
@@ -1875,8 +1885,10 @@ function queueAllAssets() {
     
     // Download sounds
     ASSET_MANAGER.queueSound('sounds/bump.wav');
+    ASSET_MANAGER.queueSound('sounds/useItem.mp3');
     ASSET_MANAGER.queueSound('sounds/itemGain.mp3');
     ASSET_MANAGER.queueSound('sounds/levelUp.wav');
+    ASSET_MANAGER.queueSound('sounds/level_complete.wav');
     ASSET_MANAGER.queueSound('sounds/monster.wav');
     ASSET_MANAGER.queueSound('sounds/monster_dying.wav');
     ASSET_MANAGER.queueSound('sounds/punch.wav');
@@ -1891,15 +1903,16 @@ $(function() {
     
     // game menu code
     var $gameLinks = $('#gameMenu').find('a'),
-        $saveGame = $('#saveGame');
+        $saveGame = $('#saveGame'),
+        $backToMenu = $('#backToMenu');
     
     // tell the user via speech the text on the button on focus
-    $gameLinks.on('focus', function() {
+    $gameLinks.add($backToMenu).on('focus', function() {
         myAudio.say(voice, language, $(this).text());
     });
     
     // allow the player to press enter on any game menu to imitate clicking on it
-    $gameLinks.on('keyup', function(e) {
+    $gameLinks.add($backToMenu).on('keyup', function(e) {
         var keyCode = e.keyCode || e.which;
         // if enter is pressed, treat it as a click
         if (keyCode === 13) {
@@ -1908,10 +1921,47 @@ $(function() {
         }
     });
     
+    $('#backToMenu').button().on('click', function() {
+        // the user wants to go back to menu, ask if he/she wants to save the game
+        $saveGame.click();
+        
+        // stop the game loop if one exists
+        if (animFrame) {
+            cancelRequestAnimationFrame(animFrame);
+        }
+        
+        // hide the canvas
+        $('#canvas').css('visibility', 'hidden');
+        
+        // hide the buttons
+        $('#options').fadeOut();
+        
+        // show the game menu and the logo
+        $('#gameMenu, #uncLogo').slideDown();
+    });
+    
     // initialize the save game button
     $saveGame.button().on('click', function() {
-        if (game) {
-            saveGame();
+          // make sure that the user wants to save the game (override previous saved game)
+        if (game && localStorage && localStorage['savedGameExists'] === 'true') {
+            var text = 'Saving this game would replace the currently saved game would you like to continue, ' +
+                       'press ENTER for yes or escape for no';
+                       
+            myAudio.say(voice, language, text);
+            
+            // as soon as we started telling the instructions, show the confirm dialog
+            myAudio.getAudio().addEventListener('playing', function() {
+                if (confirm(text.replace(',', '?'))) {
+                    saveGame();
+                } else {
+                    myAudio.say(voice, language, 'did not save game');
+                }
+                
+                // remove the event listener so that we don't 
+                this.removeEventListener('playing', arguments.callee, false);
+            }, false);
+        } else {
+            alert('Your browser does not support localStorage');
         }
     });
     

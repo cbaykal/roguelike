@@ -35,16 +35,16 @@ Goal.prototype.isPathClear = function(x, y) {
 // arguments: width and height of the grid-style map
 function RandomizeDungeon(game, numTilesX, numTilesY) {
     this.game = game;
-    this.width = width;
-    this.height = height;
+    this.width = numTilesX;
+    this.height = numTilesY;
     this.map = [[]]; // multi-dimensional array to keep track of map
     this.numFreeSpace = 0; // keep track of the number of free space in the map
     this.NEIGHBORS_VISITED_THRESHOLD = 1; // so that we avoid too many empty spaces with no walls
     this.visitedGoal = false; // we have not yet visited the goal vertex
-    this.TOTAL_TILES = width*height;
+    this.TOTAL_TILES = numTilesX*numTilesY;
     this.THRESHOLD_NEIGHBORS_EMPTY = 3; // used for simplifying the map 
-    this.MIN_WALL_NUM = Math.round(this.TOTAL_TILES*(4/5)); // was 1/4
-    this.MAX_WALL_NUM = Math.round(this.TOTAL_TILES*(9/10)); // was 1/2; 5/12
+    this.MIN_WALL_NUM = Math.round(this.TOTAL_TILES*(1/4)); // was 4/5
+    this.MAX_WALL_NUM = Math.round(this.TOTAL_TILES*(1/2)); // was 9/10
 }
 
 // initialize the map with walls

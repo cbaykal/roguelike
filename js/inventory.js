@@ -107,6 +107,8 @@ Inventory.prototype.updateQuantityDisplay = function(type, quantity) {
 
 // uses the item with the given ID
 Inventory.prototype.useItem = function(itemID) {
+    // use item and make a sound
+    //ASSET_MANAGER.playSound('sounds/use_item.mp3', false);
     var item = this.items[itemID];
     
     // use the items's effect
