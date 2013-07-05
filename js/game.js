@@ -617,6 +617,21 @@ Hero.prototype.sayDirection = function() {
     
 }
 
+// states verbally the number of enemies that are left in current level 
+Hero.prototype.sayEnemyCount = function() {
+    var enemyCount = 0;
+    
+    for (var i = 0; i < this.game.entities.length; ++i) {
+        var entityConstructor = this.game.entities[i].constructor;
+        
+        if (entityConstructor.name && (entityConstructor.name === 'Ogre' || entityConstructor.name === 'Skeleton')) {
+            ++enemyCount;
+        }
+    }
+    
+    myAudio.say(this.game.voice, this.game.language, enemyCount + ' enemies currently alive.');   
+}
+
 // recursive function to get the correct advice with respect to where to move next
 Hero.prototype.getAdvice = function(path, indexToConsider, currentTileX, currentTileY, failedAdvice) {
     // something must have gone terribly wrong... include this boundary case
@@ -716,10 +731,8 @@ Hero.prototype.update = function() {
             this.offsetY = baseOffsetY;
             this.direction = 'up';
             break;
-        case 40:
-        // down arrow
-        case 83:
-            // 'S'
+        case 40: // down arrow
+        case 83: // 'S'
             if (this.isPathClear(this.x, this.y + delta)) {
                 this.y += delta;
                 this.emitSound('sounds/walking.wav');
@@ -730,10 +743,8 @@ Hero.prototype.update = function() {
             this.offsetY = baseOffsetY + this.height * 2;
             this.direction = 'down';
             break;
-        case 37:
-        // left
-        case 65:
-            // 'A'
+        case 37: // left
+        case 65: // 'A'
             if (this.isPathClear(this.x - delta, this.y)) {
                 this.x -= delta;
                 this.emitSound('sounds/walking.wav');
@@ -744,10 +755,8 @@ Hero.prototype.update = function() {
             this.offsetY = baseOffsetY + this.height;
             this.direction = 'left';
             break;
-        case 39:
-        // right
-        case 68:
-            // 'D'
+        case 39: // right
+        case 68: // 'D'
             if (this.isPathClear(this.x + delta, this.y)) {
                 this.x += delta;
                 this.emitSound('sounds/walking.wav');
@@ -758,8 +767,7 @@ Hero.prototype.update = function() {
             this.offsetY = baseOffsetY + this.height * 3;
             this.direction = 'right';
             break;
-        case 32:
-            // space (to punch)
+        case 32: // space (to punch)
             // prevent a bug where pressing the space bar triggers a tremendous offset (since it gets invoked twice)
             // realign the offset of the sprite
             this.offsetY = punchOffset + this.offsetY > baseOffsetY + punchOffset + this.height * 3 ? this.offsetY : punchOffset + this.offsetY;
@@ -774,7 +782,11 @@ Hero.prototype.update = function() {
                 this.tellingDirection = true;
                 this.sayDirection();
             }
-        // *PURPOSEFULLY avoiding a break here (reset key)
+            
+        case 77: // "m" was pressed. Tell the user how many enemies are left
+            this.sayEnemyCount();
+                       
+        // *PURPOSEFULLY avoiding a break here (in order to reset key)*
         default:
             this.game.key = null;
             this.game.previousKey = null;
@@ -786,7 +798,9 @@ Hero.prototype.update = function() {
     if (!this.game.key && this.animation && this.direction !== 'punch') {// hero is currently animated, but no key is pressed => end animation
         this.animation = null;
     } else if ((this.game.key && !this.animation) || (this.animation && this.direction !== this.animation.direction)) {// key is pressed, but no animation is present => start animation
-        this.animation = this.direction === 'punch' ? new Animation(this.image, this.width, this.height, 11, 2 / 3, this.game.now, this.offsetX, this.offsetY, false) : new Animation(this.image, this.width, this.height, 8, 0.5, this.game.now, this.offsetX, this.offsetY);
+        this.animation = this.direction === 'punch' ? 
+                        new Animation(this.image, this.width, this.height, 11, 2 / 3, this.game.now, this.offsetX, this.offsetY, false) : 
+                        new Animation(this.image, this.width, this.height, 8, 0.5, this.game.now, this.offsetX, this.offsetY);
 
         this.animation.direction = this.direction;
     } else if (this.direction === 'punch' && this.animation && this.animation.isDone()) {
@@ -1319,6 +1333,7 @@ Dungeon.prototype.isFree = function(i, j) {
     return true;
 
 }
+
 // generate the entities based on the map array generated previously
 Dungeon.prototype.generateObject = function(i, j, numTilesX, numTilesY) {
     if (this.isFree(i, j)) {
@@ -1336,7 +1351,7 @@ Dungeon.prototype.generateObject = function(i, j, numTilesX, numTilesY) {
             var enemy = null;
 
             // further subdivide the enemy based on the random number
-            switch(this.getEnemyChoice(2)) {
+            switch (this.getEnemyChoice(2)) {
                 case 1:
                     enemy = new Ogre(this.game, xPos, yPos, 32, 48);
                     break;
@@ -1695,7 +1710,7 @@ var ASSET_MANAGER = new AssetManager(),
     language = 'en',
     levelComplete = false,
     animFrame,
-    gameKeys = [37, 40, 32, 87, 65, 83, 68, 72];
+    gameKeys = [37, 40, 32, 87, 65, 83, 68, 72, 77];
     
 // these keys cause circular reference in JSON.stringify, so avoid them
 function censor(key, value) {
@@ -1899,7 +1914,7 @@ function queueAllAssets() {
 $(function() {
     // initialize myAudio object for text to speech use
     myAudio.initialize();
-    myAudio.say(voice, language, 'Welcome to Roguelike, press TAB to navigate menu');
+    myAudio.say(voice, language, 'Welcome to Dungeon Quest, press TAB to navigate menu');
     
     // game menu code
     var $gameLinks = $('#gameMenu').find('a'),
