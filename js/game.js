@@ -617,27 +617,13 @@ Hero.prototype.sayDirection = function() {
     
 }
 
-// states verbally the number of enemies that are left in current level 
-Hero.prototype.sayEnemyCount = function() {
-    var enemyCount = 0;
-    
-    for (var i = 0; i < this.game.entities.length; ++i) {
-        var entityConstructor = this.game.entities[i].constructor;
-        
-        if (entityConstructor.name && (entityConstructor.name === 'Ogre' || entityConstructor.name === 'Skeleton')) {
-            ++enemyCount;
-        }
-    }
-    
-    myAudio.say(this.game.voice, this.game.language, enemyCount + ' enemies currently alive.');   
-}
-
 // recursive function to get the correct advice with respect to where to move next
 Hero.prototype.getAdvice = function(path, indexToConsider, currentTileX, currentTileY, failedAdvice) {
     // something must have gone terribly wrong... include this boundary case
-    if (!(path[indexToConsider])) {
+    if (!path[indexToConsider]) {
         return 'Advice cannot be given for your location.';
     }
+    
     var next = path[indexToConsider],
         dx = next.x - currentTileX,
         dy = next.y - currentTileY,
@@ -669,7 +655,6 @@ Hero.prototype.getAdvice = function(path, indexToConsider, currentTileX, current
     
     var fAdv = this.advice.replace('Go ', ''),
         ffAdv = advice.replace('Go ', '');
-   // console.log('prev:', fAdv, 'now:',ffAdv);
    
     // if we keep giving conflicting advice i.e. go north, then go south, then go north again, we have to change the direction
     this.adviceConfusedX = (fAdv === 'west' && ffAdv === 'east') || 
@@ -678,6 +663,13 @@ Hero.prototype.getAdvice = function(path, indexToConsider, currentTileX, current
                            (fAdv === 'south' && ffAdv === 'north') ? true : false;
                            
     console.log(this.adviceConfusedX, this.adviceConfusedY);
+    
+    // if we are confused, don't even bother telling the current advice, consider the next configuration in the A* path
+    if (this.adviceConfusedX || this.adviceConfusedY) {
+        console.log("adviceConfusedX: " + this.adviceConfusedX + ", \nadviceConfusedY: " + this.adviceConfusedY);
+        return this.getAdvice(path, ++indexToConsider, currentTileX, currentTileY, advice);
+    }
+    
     // either the next tile is blocked or we are giving the same bad advice,
     // so consider the subsequent tile in the path to the goal 
     if (!this.isPathClear((currentTileX + actualDx)*this.game.dungeon.tileSize,
@@ -687,6 +679,22 @@ Hero.prototype.getAdvice = function(path, indexToConsider, currentTileX, current
     }
     
     return advice;
+}
+
+
+// states verbally the number of enemies that are left in current level 
+Hero.prototype.sayEnemyCount = function() {
+    var enemyCount = 0;
+    
+    for (var i = 0; i < this.game.entities.length; ++i) {
+        var entityConstructor = this.game.entities[i].constructor;
+        
+        if (entityConstructor.name && (entityConstructor.name === 'Ogre' || entityConstructor.name === 'Skeleton')) {
+            ++enemyCount;
+        }
+    }
+    
+    myAudio.say(this.game.voice, this.game.language, enemyCount + ' enemies currently alive.');   
 }
 
 Hero.prototype.update = function() {
@@ -717,8 +725,7 @@ Hero.prototype.update = function() {
         punchOffset = 514;
 
     switch (this.game.key) {
-        case 38:
-        // up arrow
+        case 38: // up arrow
         case 87:
             // 'W'
             if (this.isPathClear(this.x, this.y - delta)) {
@@ -783,6 +790,7 @@ Hero.prototype.update = function() {
                 this.sayDirection();
             }
             
+            break;
         case 77: // "m" was pressed. Tell the user how many enemies are left
             this.sayEnemyCount();
                        
@@ -833,15 +841,18 @@ Hero.prototype.update = function() {
                                                     -Math.floor((this.y + this.scaleToY/4)), 0);
     }
     
+    // check to see whether the hero has made it to the exit (goal)
     this.isAtGoal();
     // update info about the hero
     this.stats.update();
     this.lastUpdateTime = this.game.now;
 }
+
 // recover health automatically over time
 Hero.prototype.recoverHealth = function() {
     this.addHealth(this.RECOVERY_RATE);
 }
+
 function Enemy(game, x, y, width, height) {
     AnimatedEntity.call(this, game, x, y, width, height);
     this.image = null;
