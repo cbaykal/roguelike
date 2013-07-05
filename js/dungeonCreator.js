@@ -43,8 +43,8 @@ function RandomizeDungeon(game, numTilesX, numTilesY) {
     this.visitedGoal = false; // we have not yet visited the goal vertex
     this.TOTAL_TILES = numTilesX*numTilesY;
     this.THRESHOLD_NEIGHBORS_EMPTY = 3; // used for simplifying the map 
-    this.MIN_WALL_NUM = Math.round(this.TOTAL_TILES*(1/4)); // was 4/5
-    this.MAX_WALL_NUM = Math.round(this.TOTAL_TILES*(1/2)); // was 9/10
+    this.MIN_WALL_NUM = Math.round(this.TOTAL_TILES*(4/5)); // was 4/5
+    this.MAX_WALL_NUM = Math.round(this.TOTAL_TILES*(19/20)); // was 9/10
 }
 
 // initialize the map with walls
