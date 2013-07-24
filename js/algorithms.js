@@ -25,7 +25,6 @@ Rectangle.prototype.isIntersecting = function(rect) {
     return xOverlap && yOverlap;
 }
 
-
 /*
  * A* path finder implementation by Cenk Baykal
  * I'm going to implement my own simplified variation of A* given the 

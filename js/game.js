@@ -1304,11 +1304,15 @@ Dungeon.prototype.generateDungeon = function() {
     this.goalTileY = 0;
     
     // generate a completely randomized dungeon
+    // this.randDungeonGen = new RandomizeDungeon(this.game, numTilesX, numTilesY);
+    // this.map = this.randDungeonGen.generateDungeon(this.goalTileX, this.goalTileY, 
+                                                    // Math.floor(this.game.HERO_STARTX/this.tileSize),
+                                                    // Math.floor(this.game.HERO_STARTY/this.tileSize));
+     
+    // Alternative dungeon generation
     this.randDungeonGen = new RandomizeDungeon(this.game, numTilesX, numTilesY);
-    this.map = this.randDungeonGen.generateDungeon(this.goalTileX, this.goalTileY, 
-                                                    Math.floor(this.game.HERO_STARTX/this.tileSize),
-                                                    Math.floor(this.game.HERO_STARTY/this.tileSize));
-     // console.log('map done');
+    this.map = this.randDungeonGen.generateRooms();
+                                            
     // also make the tile to the left of the goal tile a free space
     this.map[this.goalTileX - 1][this.goalTileY].type = 'F';
     

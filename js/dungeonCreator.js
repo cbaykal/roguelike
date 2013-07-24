@@ -15,8 +15,8 @@ function Vertex(x, y, type) {
 
 // goal object used for path finding and clearing the area
 function Goal(randDungeon, game, x, y) {
-    this.game = game;
     this.randDungeon = randDungeon;
+    this.game = game;
     this.x = x;
     this.y = y;
 }
@@ -31,7 +31,7 @@ Goal.prototype.isPathClear = function(x, y) {
 
     return false;
 }
-
+/*
 // arguments: width and height of the grid-style map
 function RandomizeDungeon(game, numTilesX, numTilesY) {
     this.game = game;
@@ -194,18 +194,6 @@ RandomizeDungeon.prototype.generateDungeon = function(exitX, exitY, goalX, goalY
     return this.generateDungeon(exitX, exitY, goalX, goalY);
 }
 
-// returns whether the points are on the game's boundary
-RandomizeDungeon.prototype.isGameBoundary = function(x, y) {
-    return ((x === 0 || x === this.width - 1)  && (0 <= y && y < this.height)) || // left and right sides
-           ((0 <= x && x < this.width) && (y === 0 || (this.height - 3 <= y && y <= this.height - 1))); // top and bottom
-               
-}
-
-// returns whether the given coordinates is within bounds
-RandomizeDungeon.prototype.isValidVertex = function(x, y) {
-    return x >= 1 && x <= this.width - 2 &&
-           y >= 1 && y <= this.height - 3;
-}
 
 // clear the hero's path
 RandomizeDungeon.prototype.clearPath = function(path) {
@@ -247,7 +235,7 @@ RandomizeDungeon.prototype.clearPath = function(path) {
     }
 }*/
 
-RandomizeDungeon.prototype.clearSurroundings = function(vertex) {
+/*RandomizeDungeon.prototype.clearSurroundings = function(vertex) {
     var neighbors = ['N', 'S', 'W', 'E'],
         nCoords = null,
         neighbor = null;
@@ -342,4 +330,350 @@ RandomizeDungeon.prototype.depthFirst = function(vertex) {
             }
         }
     }
+}*/
+
+/*
+ * Alternative Dungeon Building Algorithm
+ * Generates a map with rooms connected by corridors
+ * rather than a cave-like map as done above
+*/
+
+// Helper Room class 
+function Room(x, y, width, height) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
 }
+
+// returns whether the room passed in as an argument is intersecting with this room
+Room.prototype.isIntersecting = function(room) {
+    // take advantage of our helper Rectangle class as defined in algorithms.js
+    var rect1 = new Rectangle(this.x, this.x + this.width, this.y, this.y + this.height),
+        rect2 = new Rectangle(room.x, room.x + room.width, room.y, room.y + room.height);
+    
+    return rect1.isIntersecting(rect2);
+}
+
+// returns whether the given x and y coordinates are on the boundary of the room
+Room.prototype.isBoundary = function(x, y) {
+    if (x === this.x || y === this.y ||
+        (x === this.x + this.width - 1) ||
+        (y === this.y + this.height - 1)) {
+            return true;
+    }
+    
+    return false;
+}
+
+function RandomizeDungeon(game, numTilesX, numTilesY) {
+    this.game = game;
+    this.numTilesX = numTilesX;
+    this.numTilesY = numTilesY;
+    this.rooms = [] // list containing the rooms in the map (Room objects)
+    this.map = [[]] // multi-dimensional array to keep track of the map's contents
+    this.roomCount = 2 // number of rooms in the map
+    this.minRoomWidth = 6;
+    this.maxRoomWidth = 10;
+    this.minRoomHeight = 6;
+    this.maxRoomHeight = 10;
+    this.numGenTries = 0;
+    this.maxGenTries = 1e3;
+    this.roomCorridorOffset = 3;
+    this.doorSize = 2;
+    this.corridorSpace = 2;
+    
+    // initialize the map
+    this.initMap();
+}
+
+// initialize the map with walls
+// returns nothing
+RandomizeDungeon.prototype.initMap = function() {
+    this.map = [[]];
+    
+    for (var i = 0; i < this.numTilesX; ++i) {
+        this.map[i] = [];
+        for (var j = 0; j < this.numTilesX; ++j) {
+            // make it a wall
+            this.map[i][j] = new Vertex(i, j, 'W');
+        }
+    }
+}
+
+// returns whether the points are on the game's boundary
+RandomizeDungeon.prototype.isGameBoundary = function(x, y) {
+    return ((x === 0 || x === this.width - 1)  && (0 <= y && y < this.height)) || // left and right sides
+           ((0 <= x && x < this.width) && (y === 0 || (this.height - 3 <= y && y <= this.height - 1))); // top and bottom
+               
+}
+
+// returns whether the given coordinates is within bounds
+RandomizeDungeon.prototype.isValidVertex = function(x, y) {
+    return x >= 1 && x <= this.width - 2 &&
+           y >= 1 && y <= this.height - 3;
+}
+
+// Principal function responsible for generating rooms
+RandomizeDungeon.prototype.generateRooms = function() {
+    var numTries = 0; // keep track of how many times we are trying to place a room
+    
+    while (this.rooms.length < this.roomCount && ++numTries < 1e2) {
+        // randomly generate the room's specifications
+        var x = Math.ceil(Math.random()*(this.numTilesX - this.maxRoomWidth)),
+            y = Math.ceil(Math.random()*(this.numTilesY - this.maxRoomHeight)),
+            roomWidth = Math.floor(Math.random()*(this.maxRoomWidth - this.minRoomWidth + 1) + this.minRoomWidth),
+            roomHeight = Math.floor(Math.random()*(this.maxRoomHeight - this.minRoomHeight + 1) + this.minRoomHeight);
+            
+        var room = new Room(x, y, roomWidth, roomHeight);
+                
+        // check to see whether this proposed slot is free
+        if (this.isSlotFree(room)) {
+            // if it is free, then modify the map object to reflect the room's existence
+            this.placeRoom(room);
+            
+            // add this room to the list of rooms
+            this.rooms.push(room);
+            
+            // now connect the room to the previous room
+            // OR.... maybe generate all the rooms, and THEN connect them (this is a better idea)
+            
+            // since we have succeeded in finding a position for a room, reset the number of tries
+            numTries = 0;              
+        }
+    }
+    
+    // if the number of rooms generated is not sufficient, then regenerate the rooms 
+    if (this.rooms.length < this.roomCount && ++this.numGenTries < this.maxGenTries) {
+        this.rooms = [];
+        this.initMap();
+        return this.generateRooms();
+    }
+    
+    // now connect the rooms with corridors
+    this.connectRooms();
+    
+    return this.map;
+}
+
+RandomizeDungeon.prototype.isSlotFree = function(room) {
+    if (this.rooms.length > 0) {
+        for (var i = 0; i < this.rooms.length; ++i) {
+           if (this.rooms[i].isIntersecting(room)) {
+               // there is overlap with one of the already existing rooms => return false
+               return false;
+           }
+        }
+    }
+    
+    return true;
+}
+
+RandomizeDungeon.prototype.placeRoom = function(room) {
+    for (var x = room.x; x < room.x + room.width; ++x) {
+        for (var y = room.y; y < room.y + room.height; ++y) { 
+            // the walls of the room should be made up of walls (obviously...)
+            // inside of the room should be free space
+            var type = room.isBoundary(x, y) ? 'W' : 'F';
+            this.map[x][y] = new Vertex(x, y, type);
+        }
+    }
+}
+
+
+RandomizeDungeon.prototype.connectRooms = function(room) {
+    // the idea here is simple: we want all the rooms to be strongly connected
+    // i.e. there should be a path from any room A, to any room B so that they are reachable
+    // we should also connect the rooms that are closest to each other...
+    // so let's take the distance of each room from (0, 0), and then sort them
+    var distances = [];
+     
+    for (var i = 0; i < this.rooms.length; ++i) {
+       this.rooms[i].distance = this.getDistanceToOrigin(this.rooms[i]);
+       distances.push(this.rooms[i].distance);
+    }
+    
+    // sort the array
+    distances.sort(function (a, b) { return a-b; });
+    
+    // will contain a list of rooms in sorted order with respect to their distances from the origin
+    var sortedRooms = [];
+    
+    for (var i = 0; i < distances.length; ++i) {
+        for (var j = 0; j < this.rooms.length; ++j) {
+            if (this.rooms[j].distance === distances[i]) {
+                sortedRooms.push(this.rooms[j]);
+            }
+        }
+    }
+    
+    // now let's go through the sorted rooms and connect them
+    for (var i = 1; i < this.rooms.length; ++i) {
+        var previousRoom = sortedRooms[i - 1],
+            currentRoom = sortedRooms[i];
+        
+        var breathingRoomTilesX = 3,
+            breathingRoomTilesY = 4;
+            
+        var possibleStartSide = [];
+        
+        // we should always be able to extend from the right face of the room
+        possibleStartSide.push("right");
+            
+        // can we extend from the bottom face of the previous room?
+        if (previousRoom.y <= this.numTilesY - breathingRoomTilesY) {
+            possibleStartSide.push("bottom");    
+        }
+        
+        if (previousRoom.y >= breathingRoomTilesY) {
+            possibleStartSide.push("top");
+        }
+        
+        // figure out the possible endings of the corridor
+        var possibleEndSide = [];
+        
+        // we should always be able to extend to the left face of the room
+        possibleEndSide.push("left");
+        
+        if (currentRoom.y <= this.numTilesY - breathingRoomTilesY) {
+            possibleEndSide.push("bottom");
+        }
+        
+        if (currentRoom.y >= breathingRoomTilesY) {
+            possibleEndSide.push("top");
+        }
+        
+        // now pick a random start and end side from the possible sides
+        var startSide = possibleStartSide[Math.floor(Math.random()*possibleStartSide.length)],
+            endSide = possibleEndSide[Math.floor(Math.random()*possibleEndSide.length)];
+        
+        // console.log(previousRoom);
+        // console.log(actualStart);
+        // console.log(this.getRandomDoorLocation(previousRoom, actualStart));
+        // console.log(currRoom);
+        // console.log(actualEnding);
+        // console.log(this.getRandomDoorLocation(currRoom, actualEnding));
+        
+        var startPos = this.getRandomDoorLocation(previousRoom, startSide),
+            endingPos = this.getRandomDoorLocation(currentRoom, endSide);
+        console.log(startPos);
+        console.log(previousRoom);
+        console.log(endingPos);
+        console.log(currentRoom);
+        // now generate the corridor
+        this.generateCorridor(startSide, startPos.x, startPos.y, endSide, endingPos.x, endingPos.y);
+           
+    }
+}
+
+// returns a random position (object pos with x, y properties) on the roomSide specified
+RandomizeDungeon.prototype.getRandomDoorLocation = function(room, roomSide) {
+    
+    var pos = {
+        x: 0,
+        y: 0
+    };
+    
+    switch (roomSide) {
+        case 'top':
+            pos.x = room.x + Math.ceil(Math.random()*(room.width - this.roomCorridorOffset));
+            pos.y = room.y;
+            break;
+        case 'bottom':
+            pos.x = room.x + Math.ceil(Math.random()*(room.width - this.roomCorridorOffset));
+            pos.y = room.y + room.height - 1;
+            break;
+        case 'left':
+            pos.x = room.x;
+            pos.y = room.y + Math.ceil(Math.random()*(room.height - this.roomCorridorOffset));
+            break;
+        case 'right':
+            pos.x = room.x + room.width - 1;
+            pos.y = room.y + Math.ceil(Math.random()*(room.height - this.roomCorridorOffset));
+            break;
+    }
+    
+    return pos;
+}
+
+// pseudo-distance without the sqrt for performance
+RandomizeDungeon.prototype.getDistanceToOrigin = function(room) {
+    // sqrt() is really expensive...
+    return Math.pow(room.x, 2) + Math.pow(room.y, 2);
+}
+
+// function that generates the door on the side of the room specified
+// returns: none
+RandomizeDungeon.prototype.generateDoor = function(side, xPos, yPos) {
+    // carve out the starting position
+    switch (side) {
+        case 'top':
+        case 'bottom':
+            for (var x = xPos; x < xPos + this.doorSize; ++x) {
+                this.map[x][yPos].type = 'F';
+            }
+        break;
+        
+        case 'left':
+        case 'right':
+            for (var y = yPos; y < yPos + this.doorSize; ++y) {
+                this.map[xPos][y].type = 'F';
+            }
+        break;
+    } 
+}
+
+
+RandomizeDungeon.prototype.generateCorridor = function(startSide, startX, startY, endSide, endX, endY) {
+    var space = 2,
+        doorSize = 2,
+        startHorizontal;
+    
+    console.log(startSide);
+    console.log(endSide);
+    
+    // generate the door for the starting room
+    this.generateDoor(startSide, startX, startY);
+    
+    
+    if ((startSide === 'right' && (endSide === 'right' || endSide === 'left')) || (startSide === 'left' && (endSide === 'right' || endSide === 'left'))
+        (startSide === 'bottom' && (endSide === 'bottom' || endSide === 'top')) || (startSide === 'top' && (endSide === 'top' || endSide === 'bottom'))) {
+        
+        // same orientation (i.e. (right || left)/(right || left)), so we have to generate 3 corridors
+        
+    } else if (startSide === 'right' || startSide === 'left') {
+        // different side and we are starting from either the right or left side, so start with horizontal corridor first
+        this.generateHorizontalCorridor(startX, startY, endX, startY);
+        this.generateVerticalCorridor(endX, startY, endX, endY);
+    } else {
+        this.generateVerticalCorridor(startX, startY, startX, endY);
+        this.generateHorizontalCorridor(startX, endY, endX, endY);
+    }
+    // generate the door for the ending room
+    this.generateDoor(endSide, endX, endY);
+}
+
+RandomizeDungeon.prototype.generateHorizontalCorridor = function(startX, startY, endX, endY) {
+    for (var x = startX + 1; x <= endX; ++x) {
+        this.map[x][startY].type = 'W';
+        
+        for (var y = startY + 1; y <= startY + this.corridorSpace; ++y) {
+            this.map[x][y].type = 'F';
+        }
+        
+        this.map[x][startY + this.corridorSpace + 1].type = 'W';
+    }
+}
+
+RandomizeDungeon.prototype.generateVerticalCorridor = function(startX, startY, endX, endY) {
+    for (var y = startY + 1; y <= endY; ++y) {
+        this.map[startX][y].type = 'W';
+        
+        for (var x = startX + 1; x <= startX + this.corridorSpace; ++x) {
+            this.map[x][y].type = 'F';
+        }
+        
+        this.map[startX + this.corridorSpace + 1][y].type = 'W';
+    }
+}
+
