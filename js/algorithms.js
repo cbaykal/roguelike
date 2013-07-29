@@ -181,6 +181,8 @@ PathFinder.prototype.findPath = function(pathClearFunction) {
 
     this.goalNode = new Node(tile.i, tile.j, null, 0);
     
+    console.log("goal x: ", this.goalNode.x, " goal y: ", this.goalNode.y);
+    
     tile = this.getTile(this.goal.x, this.goal.y);
 
     var startNode = new Node(tile.i, tile.j, null, 0),
@@ -199,7 +201,8 @@ PathFinder.prototype.findPath = function(pathClearFunction) {
         //console.log(this.open);
         if (typeof bestNode.node === 'undefined') {
             // there was an error...
-            success = false;
+           //success = false;
+            console.log('undefined');
             break;
         }
 

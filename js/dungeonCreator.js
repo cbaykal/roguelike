@@ -357,8 +357,8 @@ Room.prototype.isIntersecting = function(room) {
 
 // returns whether the given x and y coordinates are on the boundary of the room
 Room.prototype.isBoundary = function(x, y) {
-    if ((x >= this.x && x <= this.x + this.width - 1 && (y === this.y || y === this.height - 1)) ||
-        (y >= this.y && y <= this.y + this.height - 1 && (x === this.x || x === this.width - 1))) {
+    if ((x >= this.x && x <= this.x + this.width - 1 && (y === this.y || y === this.y + this.height - 1)) ||
+        (y >= this.y && y <= this.y + this.height - 1 && (x === this.x || x === this.x + this.width - 1))) {
             return true;
     }
     
@@ -371,15 +371,15 @@ function RandomizeDungeon(game, numTilesX, numTilesY) {
     this.numTilesY = numTilesY;
     this.rooms = [] // list containing the rooms in the map (Room objects)
     this.map = [[]] // multi-dimensional array to keep track of the map's contents
-    this.roomCount = 2; // number of rooms in the map
-    this.minRoomWidth = 6;
-    this.maxRoomWidth = 10;
-    this.minRoomHeight = 6;
-    this.maxRoomHeight = 10;
+    this.roomCount = 6; // number of rooms in the map
+    this.minRoomWidth = 10;
+    this.maxRoomWidth = 14;
+    this.minRoomHeight = 10;
+    this.maxRoomHeight = 14;
     this.numGenTries = 0;
     this.maxGenTries = 1e3;
     this.roomCorridorOffset = 3;
-    this.doorSize = 2;
+    this.doorSize = 1;
     this.corridorSpace = 2;
     
     // initialize the map
@@ -400,15 +400,26 @@ RandomizeDungeon.prototype.initMap = function() {
     }
 }
 
-// returns whether the given x and y is located on ANY room's boundary
-RandomizeDungeon.prototype.isOnRoomBoundary = function(x, y) {
-    for (var i = 0; i < this.rooms.length; ++i) {
-        if (this.rooms[i].isBoundary(x, y)) {
-            return true;            
+// returns whether the given x and y is located in a room
+RandomizeDungeon.prototype.isNotInsideRoom = function(r, x, y) {
+  //  for (var i = 0; i < this.rooms.length; ++i) {
+    //    var r = this.rooms[i];
+        
+        if (r.x >= x && x <= r.x + r.width && 
+            r.y >= y && y <= r.y + r.height) {
+            console.log('returning true');
+            console.log(x);
+            console.log(y);
+            console.log(r);
+            return false;
         }
-    }
+    //}
     
-    return false;
+                console.log('returning false');
+            console.log(x);
+            console.log(y);
+    
+    return true;
 }
 
 // returns whether the points are on the game's boundary
@@ -490,91 +501,6 @@ RandomizeDungeon.prototype.placeRoom = function(room) {
     }
 }
 
-RandomizeDungeon.prototype.connectRooms = function(room) {
-    // the idea here is simple: we want all the rooms to be strongly connected
-    // i.e. there should be a path from any room A, to any room B so that they are reachable
-    // we should also connect the rooms that are closest to each other...
-    // so let's take the distance of each room from (0, 0), and then sort them
-    var distances = [];
-     
-    for (var i = 0; i < this.rooms.length; ++i) {
-       this.rooms[i].distance = this.getDistanceToOrigin(this.rooms[i]);
-       distances.push(this.rooms[i].distance);
-    }
-    
-    // sort the array
-    distances.sort(function (a, b) { return a-b; });
-    
-    // will contain a list of rooms in sorted order with respect to their distances from the origin
-    var sortedRooms = [];
-    
-    for (var i = 0; i < distances.length; ++i) {
-        for (var j = 0; j < this.rooms.length; ++j) {
-            if (this.rooms[j].distance === distances[i]) {
-                sortedRooms.push(this.rooms[j]);
-            }
-        }
-    }
-    
-    // now let's go through the sorted rooms and connect them
-    for (var i = 1; i < this.rooms.length; ++i) {
-        var previousRoom = sortedRooms[i - 1],
-            currentRoom = sortedRooms[i];
-        
-        var breathingRoomTilesX = 3,
-            breathingRoomTilesY = 4;
-            
-        var possibleStartSide = [];
-        
-        // we should always be able to extend from the right face of the room
-        possibleStartSide.push("right");
-            
-        // can we extend from the bottom face of the previous room?
-        if (previousRoom.y <= this.numTilesY - breathingRoomTilesY) {
-            possibleStartSide.push("bottom");    
-        }
-        
-        if (previousRoom.y >= breathingRoomTilesY) {
-            //possibleStartSide.push("top");
-        }
-        
-        // figure out the possible endings of the corridor
-        var possibleEndSide = [];
-        
-        // we should always be able to extend to the left face of the room
-        possibleEndSide.push("left");
-        
-        if (currentRoom.y <= this.numTilesY - breathingRoomTilesY) {
-            possibleEndSide.push("bottom");
-        }
-        
-        if (currentRoom.y >= breathingRoomTilesY) {
-          //  possibleEndSide.push("top");
-        }
-        
-        // now pick a random start and end side from the possible sides
-        var startSide = possibleStartSide[Math.floor(Math.random()*possibleStartSide.length)],
-            endSide = possibleEndSide[Math.floor(Math.random()*possibleEndSide.length)];
-        
-        // console.log(previousRoom);
-        // console.log(actualStart);
-        // console.log(this.getRandomDoorLocation(previousRoom, actualStart));
-        // console.log(currRoom);
-        // console.log(actualEnding);
-        // console.log(this.getRandomDoorLocation(currRoom, actualEnding));
-        
-        var startPos = this.getRandomDoorLocation(previousRoom, startSide),
-            endingPos = this.getRandomDoorLocation(currentRoom, endSide);
-        console.log(startPos);
-        console.log(previousRoom);
-        console.log(endingPos);
-        console.log(currentRoom);
-        // now generate the corridor
-        this.generateCorridor(startSide, startPos.x, startPos.y, endSide, endingPos.x, endingPos.y);
-           
-    }
-}
-
 // returns a random position (object pos with x, y properties) on the roomSide specified
 RandomizeDungeon.prototype.getRandomDoorLocation = function(room, roomSide) {
     
@@ -586,18 +512,18 @@ RandomizeDungeon.prototype.getRandomDoorLocation = function(room, roomSide) {
     switch (roomSide) {
         case 'top':
             pos.x = room.x + Math.ceil(Math.random()*(room.width - this.roomCorridorOffset));
-            pos.y = room.y;
+            pos.y = room.y + 1;
             break;
         case 'bottom':
             pos.x = room.x + Math.ceil(Math.random()*(room.width - this.roomCorridorOffset));
-            pos.y = room.y + room.height - 1;
+            pos.y = room.y + room.height - 2;
             break;
         case 'left':
-            pos.x = room.x;
+            pos.x = room.x + 1;
             pos.y = room.y + Math.ceil(Math.random()*(room.height - this.roomCorridorOffset));
             break;
         case 'right':
-            pos.x = room.x + room.width - 1;
+            pos.x = room.x + room.width - 2;
             pos.y = room.y + Math.ceil(Math.random()*(room.height - this.roomCorridorOffset));
             break;
     }
@@ -605,10 +531,27 @@ RandomizeDungeon.prototype.getRandomDoorLocation = function(room, roomSide) {
     return pos;
 }
 
-// pseudo-distance without the sqrt for performance
-RandomizeDungeon.prototype.getDistanceToOrigin = function(room) {
-    // sqrt() is really expensive...
-    return Math.pow(room.x, 2) + Math.pow(room.y, 2);
+RandomizeDungeon.prototype.connectRooms = function(room) {
+    // the idea here is simple: we want all the rooms to be strongly connected
+    // i.e. there should be a path from any room A, to any room B so that they are reachable
+    // we should also connect the rooms that are closest to each other...
+    // so let's take the distance of each room from (0, 0), and then sort them
+    
+    // implement sorted rooms functionality
+    
+    // now let's go through the sorted rooms and connect them
+    for (var i = 1; i < this.rooms.length; ++i) {
+        var previousRoom = this.rooms[i - 1],
+            currentRoom = this.rooms[i];
+        
+        startSide = 'right';
+        endSide = 'right';
+        var startPos = this.getRandomDoorLocation(previousRoom, startSide),
+            endingPos = this.getRandomDoorLocation(currentRoom, endSide);
+        // now generate the corridor
+        this.generateCorridor(previousRoom, startSide, startPos.x, startPos.y, endSide, endingPos.x, endingPos.y);
+           
+    }
 }
 
 // function that generates the door on the side of the room specified
@@ -632,106 +575,30 @@ RandomizeDungeon.prototype.generateDoor = function(side, xPos, yPos) {
     } 
 }
 
-RandomizeDungeon.prototype.swap = function(objOne, objTwo) {
-    var tmp = objOne;
-    objOne = objTwo;
-    objTwo = objOne;
-}
-
-RandomizeDungeon.prototype.generateCorridor = function(startSide, startX, startY, endSide, endX, endY) {
-    /*var space = 2,
-        doorSize = 2,
-        startHorizontal;
-    
-    console.log(startSide);
-    console.log(endSide);
+RandomizeDungeon.prototype.generateCorridor = function(startRoom, startSide, startX, startY, endSide, endX, endY) {
+    console.log(this.numTilesX);
+    this.generateDoor(endSide, startX, startY);
+    this.generateDoor(startSide, endX, endY);
     
 
-    // generate the door for the starting room
-    this.generateDoor(startSide, startX, startY);
+       
+    var pathFinder = new PathFinder(this.game, 
+                                     new Goal(this, this.game, endX*this.game.dungeon.tileSize, endY*this.game.dungeon.tileSize),
+                                     new Goal(this, this.game, startX*this.game.dungeon.tileSize, startY*this.game.dungeon.tileSize));
     
-    if (startX > endX) {
-        console.log('Swapping x');
-        this.swap(startX, endX);
-    }
+    this.startRoom = startRoom;
     
-    if (startY > endY) {
-        console.log('Swapping y');
-        this.swap(startY, endY);
-    }
+    var path = pathFinder.findPath(function(x, y) {
+           //return this.game.dungeon.randDungeonGen.isNotInsideRoom(this.game.dungeon.randDungeonGen.startRoom, x, y);
+           return true;
+    });
     
-    if ((startSide === 'right' && (endSide === 'right' || endSide === 'left')) || (startSide === 'left' && (endSide === 'right' || endSide === 'left'))
-        || (startSide === 'bottom' && (endSide === 'bottom' || endSide === 'top')) || (startSide === 'top' && (endSide === 'top' || endSide === 'bottom'))) {
-        
-        // same orientation (i.e. (right || left)/(right || left)), so we have to generate 3 corridors
-        var deltaX = endX - startX,
-            deltaY = endY - startY,
-            firstStepX = 0,
-            firstStepY = 0;
-        
-        // start with vertical corridor
-        if (startSide === 'bottom' || startSide === 'top') {
-            var midStepY = startY + Math.floor(deltaY/2);
-            this.generateVerticalCorridor(startX, startY, startX, midStepY);
-            this.generateHorizontalCorridor(startX, midStepY, endX, midStepY);
-            this.generateVerticalCorridor(endX, midStepY, endX, endY);
-        } else {
-            // do nothing for now...
-        }
-        
-    } else if (startSide === 'right' || startSide === 'left') {
-        // different side and we are starting from either the right or left side, so start with horizontal corridor first
-        this.generateHorizontalCorridor(startX, startY, endX, startY);
-        this.generateVerticalCorridor(endX, startY, endX, endY);
-    } else {
-        this.generateVerticalCorridor(startX, startY, startX, endY);
-        this.generateHorizontalCorridor(startX, endY, endX, endY);
-    }
-    // generate the door for the ending room*/
-  //  this.generateDoor(startSide, startX, startY);
-    this.generateDoor(startSide, startX, endX);
-    this.generateDoor(endSide, endX, endY);
-   
-   var randNeighbor = [-1, 1, 0];
-   var path;
-   
-        var pathFinder = new PathFinder(this.game, 
-                                        new Goal(this, this.game, endX*this.game.dungeon.tileSize, endY*this.game.dungeon.tileSize),
-                                        new Goal(this, this.game, startX*this.game.dungeon.tileSize, startY*this.game.dungeon.tileSize));
-                 
-        path = pathFinder.findPath(function(x, y) {
-            //this.game.dungeon.randDungeonGen.isOnRoomBoundary(x, y);
-            return true;
-        });
     console.log(path);
-    for (var i = 1; i < path.length; ++i) {
+  
+    for (var i = 0; i < path.length; ++i) {
        var node = path[i];
            
        this.map[node.x][node.y].type = 'F';
+       
     }
 }
-
-RandomizeDungeon.prototype.generateHorizontalCorridor = function(startX, startY, endX, endY) {
-    for (var x = startX + 1; x <= endX; ++x) {
-        this.map[x][startY].type = 'W';
-        
-        for (var y = startY; y <= startY + this.corridorSpace; ++y) {
-            this.map[x][y].type = 'F';
-        }
-        
-        this.map[x][startY + this.corridorSpace + 1].type = 'W';
-    }
-}
-
-RandomizeDungeon.prototype.generateVerticalCorridor = function(startX, startY, endX, endY) {
-    for (var y = startY + 1; y <= endY; ++y) {
-        this.map[startX][y].type = 'W';
-        
-        for (var x = startX; x <= startX + this.corridorSpace; ++x) {
-            this.map[x][y].type = 'F';
-        }
-        
-        this.map[startX + this.corridorSpace + 1][y].type = 'W';
-    }
-}
-
