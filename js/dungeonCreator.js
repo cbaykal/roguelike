@@ -538,14 +538,35 @@ RandomizeDungeon.prototype.connectRooms = function(room) {
     // so let's take the distance of each room from (0, 0), and then sort them
     
     // implement sorted rooms functionality
+    var distances = [];
+     
+    for (var i = 0; i < this.rooms.length; ++i) {
+       this.rooms[i].distance = this.getDistanceToOrigin(this.rooms[i]);
+       distances.push(this.rooms[i].distance);
+    }
+    
+    // sort the array
+    distances.sort(function (a, b) { return a-b; });
+    
+    // will contain a list of rooms in sorted order with respect to their distances from the origin
+    var sortedRooms = [];
+    
+    for (var i = 0; i < distances.length; ++i) {
+        for (var j = 0; j < this.rooms.length; ++j) {
+            if (this.rooms[j].distance === distances[i]) {
+                sortedRooms.push(this.rooms[j]);
+            }
+        }
+    }
     
     // now let's go through the sorted rooms and connect them
     for (var i = 1; i < this.rooms.length; ++i) {
-        var previousRoom = this.rooms[i - 1],
-            currentRoom = this.rooms[i];
+        var previousRoom = this.sortedRooms[i - 1],
+            currentRoom = this.sortedRooms[i];
         
-        startSide = 'right';
-        endSide = 'right';
+        var startSide = 'right',
+            endSide = 'right';
+            
         var startPos = this.getRandomDoorLocation(previousRoom, startSide),
             endingPos = this.getRandomDoorLocation(currentRoom, endSide);
         // now generate the corridor
@@ -576,12 +597,10 @@ RandomizeDungeon.prototype.generateDoor = function(side, xPos, yPos) {
 }
 
 RandomizeDungeon.prototype.generateCorridor = function(startRoom, startSide, startX, startY, endSide, endX, endY) {
-    console.log(this.numTilesX);
     this.generateDoor(endSide, startX, startY);
     this.generateDoor(startSide, endX, endY);
     
 
-       
     var pathFinder = new PathFinder(this.game, 
                                      new Goal(this, this.game, endX*this.game.dungeon.tileSize, endY*this.game.dungeon.tileSize),
                                      new Goal(this, this.game, startX*this.game.dungeon.tileSize, startY*this.game.dungeon.tileSize));
