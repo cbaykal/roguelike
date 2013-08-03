@@ -278,7 +278,7 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, c
         alert('error! \ni: ' + i + '\nj: ' + j);
     }
 
-    if (this.game.dungeon.map[i][j].type === 'W') {
+    if (this.game.dungeon.map[i][j].type === 'W' ) {
         return false;  // there's a wall, so obviously can't move there
     }
 
@@ -294,7 +294,7 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, c
         var entity = this.game.entities[i];
         // obviously don't check to see whether the entity is colliding with itself
         // also, for path planning, I need to make sure it doesn't see the hero as an obstacle
-        if (this === entity || (!considerHero && entity.constructor.name === 'Hero')) {
+        if (this === entity || (!considerHero && entity.constructor.name === 'Hero') || entity.constructor.name === 'Fire') {
             continue;
         }
 
@@ -611,6 +611,7 @@ Hero.prototype.sayDirection = function() {
         that = this,
         advice = '';
         
+    console.log('printing planner');
     console.log(planner);
     // get the advice
     this.advice = this.getAdvice(path, 1, currentTileX, currentTileY, null);
@@ -1375,10 +1376,10 @@ Dungeon.prototype.markHeroTerritory = function(numTilesX, numTilesY) {
     
     // set the hero's initial direction depending on its start position
     this.game.heroStartDirection = randChoice < 2 ? 'down' : 'up';
-    console.log(this.game.heroStartDirection);
+    
     // reserve the starting space for the hero so that there are no walls or enemies nearby
-    for (var x = startPos.x; x < startPos.x + SAFETY_AREA_SIZE; ++x) {
-        for (var y = startPos.y; y < startPos.y + SAFETY_AREA_SIZE; ++y) {
+    for (var x = startPos.x; x < startPos.x + SAFETY_AREA_SIZE - 1; ++x) {
+        for (var y = startPos.y; y < startPos.y + SAFETY_AREA_SIZE - 1; ++y) {
             this.map[x][y].type = 'R';
         }
     }
@@ -1390,8 +1391,7 @@ Dungeon.prototype.markHeroTerritory = function(numTilesX, numTilesY) {
     // connect both the hero and the goal to the nearest room
     this.randDungeonGen.connectNearestRoomToPoint(startPos.x, startPos.y);
     this.randDungeonGen.connectNearestRoomToPoint(goalPos.x, goalPos.y);
-    
-   
+  
 }
 
 // return wall based on the map
@@ -1402,7 +1402,6 @@ Dungeon.prototype.isFree = function(i, j) {
     }
     
     return true;
-
 }
 
 // generate the entities based on the map array generated previously
@@ -1413,10 +1412,10 @@ Dungeon.prototype.generateObject = function(i, j, numTilesX, numTilesY) {
             yPos = j * this.tileSize;
 
         // generate an entity based on the random number
-       /* if (rand <= this.miscProbability) {
+        if (rand <= this.miscProbability) {
             this.game.addEntity(new Fire(this.game, xPos, yPos, 64, 64));
             return 'M'; // 'M' for Misc.
-        } else*/
+        } else
         
         if (rand >= 1 - this.enemyProbability) {
             var enemy = null;
@@ -1533,8 +1532,8 @@ function GameEngine(ctx) {
     this.msgLog = new MessageLog(this.voice, this.language);
     this.HERO_STARTX = 50;
     this.HERO_STARTY = this.frameHeight - 96;
-    this.ENEMY_PROBABILITY = 1e-2 + this.dungeonLevel/1e2; // 5e-2; 2e-2
-    this.MISC_PROBABILITY = 0; 
+    this.ENEMY_PROBABILITY =/* 1e-2 + this.dungeonLevel/1e2;*/ 0; // 5e-2; 2e-2
+    this.MISC_PROBABILITY = /*1e-2;*/ 0;
     this.GEM_COLORS = ['blue', 'green', 'red']; // 5e-3
 }
 

@@ -25,10 +25,14 @@ Goal.prototype.isPathClear = function(x, y) {
     var x = Math.floor(x/this.game.dungeon.tileSize),
         y = Math.floor(y/this.game.dungeon.tileSize);
     
-    if (this.randDungeon.isValidVertex(x, y) && this.randDungeon.map[x][y].type === 'F') {
+    console.log('x: ' + x);
+    console.log('y: ' + y);
+    console.log(this.randDungeon.isValidVertex(x, y));
+    if (this.randDungeon.isValidVertex(x, y) && (this.randDungeon.map[x][y].type === 'F' || this.randDungeon.map[x][y].type === 'M')) {
         return true;
     }
-
+    
+    console.log('RETURNING FALSE');
     return false;
 }
 /*
@@ -421,10 +425,13 @@ RandomizeDungeon.prototype.isGameBoundary = function(x, y) {
                
 }
 
-// returns whether the given coordinates is within bounds
+// returns whether the given coordinates is within bounds of the map
 RandomizeDungeon.prototype.isValidVertex = function(x, y) {
-    return x >= 1 && x <= this.width - 2 &&
-           y >= 1 && y <= this.height - 3;
+   /* return x >= 1 && x <= this.numTilesX - 2 &&
+           y >= 1 && y <= this.numTilesY - 3;*/
+      
+      return x >= 0 && x <= this.numTilesX - 1 &&
+             y >= 0 && y <= this.numTilesY - 1;
 }
 
 // Principal function responsible for generating rooms
@@ -599,7 +606,7 @@ RandomizeDungeon.prototype.connectRooms = function(room) {
         var startSide = this.pickRandomSide(previousRoom),
             endSide = this.pickRandomSide(currentRoom);
         
-            
+         
         var startPos = this.getRandomDoorLocation(previousRoom, startSide),
             endingPos = this.getRandomDoorLocation(currentRoom, endSide);
         // now generate the corridor
@@ -645,6 +652,11 @@ RandomizeDungeon.prototype.generateCorridor = function(startRoom, startSide, sta
            //return this.game.dungeon.randDungeonGen.isNotInsideRoom(this.game.dungeon.randDungeonGen.startRoom, x, y);
            return true;
     });
+    
+    if (!path) {
+        console.log('PATH IS UNDEFINED WHILE CONNECTING ROOMS:');
+        console.log(path);
+    }
   
     for (var i = 0; i < path.length; ++i) {
        var node = path[i];
@@ -658,9 +670,6 @@ RandomizeDungeon.prototype.generateCorridor = function(startRoom, startSide, sta
 // Function connects the nearest room to the (x, y) passed in as arguments 
 // the x and y arguments must be passed in as ***TILE UNITS*** (not pixel coordinates)
 RandomizeDungeon.prototype.connectNearestRoomToPoint = function(x, y) {
-    /*
-     * TODO: DUPLICATE CODE HERE
-     */
     
     // implement sorted rooms functionality
     var distances = [];
@@ -700,11 +709,8 @@ RandomizeDungeon.prototype.connectNearestRoomToPoint = function(x, y) {
         return true;
     });
     
-    console.log(path);
-    
     for (var i = 0; i < path.length; ++i) {
        var node = path[i];
-           
        this.map[node.x][node.y].type = 'F';
        
     }
