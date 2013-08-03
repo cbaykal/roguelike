@@ -1296,12 +1296,10 @@ function Dungeon(game, enemyProbability, miscProbability) {
 // use a two dimensional array to keep track of the initial objects and entities in the dungeon
 Dungeon.prototype.generateDungeon = function() {
     levelComplete = false;
+    
     var numTilesX = Math.ceil(this.game.frameWidth / this.tileSize),
         numTilesY = Math.ceil(this.game.frameHeight / this.tileSize);
         
-    // set the goal to be the top right corner
-    this.goalTileX = numTilesX - 2;
-    this.goalTileY = 0;
     
     // generate a completely randomized dungeon
     // this.randDungeonGen = new RandomizeDungeon(this.game, numTilesX, numTilesY);
@@ -1312,13 +1310,18 @@ Dungeon.prototype.generateDungeon = function() {
     // Alternative dungeon generation
     this.randDungeonGen = new RandomizeDungeon(this.game, numTilesX, numTilesY);
     this.map = this.randDungeonGen.generateRooms();
-                                            
-    // also make the tile to the left of the goal tile a free space
-    this.map[this.goalTileX - 1][this.goalTileY].type = 'F';
     
     // after we generate this map, we have to make sure that there are no walls/enemies near the hero's start point
     this.markHeroTerritory(numTilesX, numTilesY);
-
+    
+    // set the goal to be the top right corner
+    this.goalTileX = numTilesX - 2;
+    this.goalTileY = 0;
+    
+    // also make the tile to the left of the goal tile a free space
+    this.map[this.goalTileX - 1][this.goalTileY].type = 'F';
+    
+    // as a last step, iterate the map as a two-dimensional matrix and generate the appropriate object at the (x, y) position
     for (var i = 0; i < numTilesX; ++i) {
         for (var j = 0; j < numTilesY; ++j) {
             // generate the object to place at this location in the map
@@ -1328,6 +1331,28 @@ Dungeon.prototype.generateDungeon = function() {
 }
 
 Dungeon.prototype.markHeroTerritory = function(numTilesX, numTilesY) {
+    var possibleStartPos = [
+        {x: 1, y: 1}, // top left
+        {x: numTilesX - 2, y: 1}, // top right
+        {x: numTilesX - 2, y: numTilesY - 2}, // bottom right
+        {x: 1, y: numTilesY} // bottom left
+        ];
+        
+    var possibleGoalPos = [
+        {x: numTilesX, y: numTilesY}, // bottom right corresponds to top left start
+        {x: 0, y: numTilesY}, // bottom left corresponds to top right start
+        {x: 0, y: 0}, // top left corresponds to bottom right start
+        {x: numTilesX, y : 0} // top right corresponds to bottom left start
+    ];
+    
+    var randChoice = Math.floor(Math.random()*possibleStartPos.length),
+        startPos = possibleStartPos[randChoice],
+        goalPos = possibleGoalPos[randChoice];
+    
+    // dimensions of the space
+    var space = 5;
+    console.log('randChoice: ' + randChoice);
+    
     var endX = Math.ceil(this.game.HERO_STARTX/this.game.dungeon.tileSize),
         startY = Math.ceil(this.game.HERO_STARTY/this.game.dungeon.tileSize);
         

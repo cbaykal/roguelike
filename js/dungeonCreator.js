@@ -407,17 +407,9 @@ RandomizeDungeon.prototype.isNotInsideRoom = function(r, x, y) {
         
         if (r.x >= x && x <= r.x + r.width && 
             r.y >= y && y <= r.y + r.height) {
-            console.log('returning true');
-            console.log(x);
-            console.log(y);
-            console.log(r);
+ 
             return false;
         }
-    //}
-    
-                console.log('returning false');
-            console.log(x);
-            console.log(y);
     
     return true;
 }
@@ -439,7 +431,7 @@ RandomizeDungeon.prototype.isValidVertex = function(x, y) {
 RandomizeDungeon.prototype.generateRooms = function() {
     var numTries = 0; // keep track of how many times we are trying to place a room
     
-    while (this.rooms.length < this.roomCount && ++numTries < 1e2) {
+    while (this.rooms.length < this.roomCount && ++numTries < 1e3) {
         // randomly generate the room's specifications
         var x = Math.ceil(Math.random()*(this.numTilesX - this.maxRoomWidth)),
             y = Math.ceil(Math.random()*(this.numTilesY - this.maxRoomHeight)),
@@ -531,6 +523,46 @@ RandomizeDungeon.prototype.getRandomDoorLocation = function(room, roomSide) {
     return pos;
 }
 
+// pseudo-distance without the sqrt for performance
+RandomizeDungeon.prototype.getPseudoDistance = function(xOne, yOne, xTwo, yTwo) {
+    // sqrt() is really expensive...
+    return Math.pow(xOne - xTwo, 2) + Math.pow(yOne - yTwo, 2);
+}
+
+RandomizeDungeon.prototype.getDistanceToOrigin = function(room) {
+    return this.getPseudoDistance(room.x, 0, room.y, 0);
+}
+
+
+// args: room object
+// returns: a string dictating the random side of the room
+RandomizeDungeon.prototype.pickRandomSide = function(room) {
+    var options = [];
+    
+    var breathingRoomTiles = 3;
+    
+    // enough space at the top of the room?
+    if (room.y >= breathingRoomTiles) {
+        options.push('top');
+    }
+    
+    // enough space at the bottom of the room?
+    if (room.y + room.height >= this.numTilesY - breathingRoomTiles) {
+        options.push('bottom');
+    }
+    
+    // enough space to the left?
+    if (room.x >= breathingRoomTiles) {
+        options.push('left');
+    }
+    
+    if (room.x + room.width <= this.numTilesX - breathingRoomTiles) {
+        options.push('right');
+    }
+    
+    return options[Math.floor(Math.random()*options.length)];
+}
+
 RandomizeDungeon.prototype.connectRooms = function(room) {
     // the idea here is simple: we want all the rooms to be strongly connected
     // i.e. there should be a path from any room A, to any room B so that they are reachable
@@ -561,11 +593,14 @@ RandomizeDungeon.prototype.connectRooms = function(room) {
     
     // now let's go through the sorted rooms and connect them
     for (var i = 1; i < this.rooms.length; ++i) {
-        var previousRoom = this.sortedRooms[i - 1],
-            currentRoom = this.sortedRooms[i];
+        var previousRoom = sortedRooms[i - 1],
+            currentRoom = sortedRooms[i];
         
-        var startSide = 'right',
-            endSide = 'right';
+        var startSide = this.pickRandomSide(previousRoom),
+            endSide = this.pickRandomSide(currentRoom);
+        
+        console.log(startSide);
+        console.log(endSide);
             
         var startPos = this.getRandomDoorLocation(previousRoom, startSide),
             endingPos = this.getRandomDoorLocation(currentRoom, endSide);
@@ -573,6 +608,9 @@ RandomizeDungeon.prototype.connectRooms = function(room) {
         this.generateCorridor(previousRoom, startSide, startPos.x, startPos.y, endSide, endingPos.x, endingPos.y);
            
     }
+    
+    // finally we need to connect the hero's start position with the nearest room 
+    this.game.START_HEROX
 }
 
 // function that generates the door on the side of the room specified

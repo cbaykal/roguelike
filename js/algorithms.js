@@ -165,13 +165,12 @@ PathFinder.prototype.inArray = function(array, searchNode) {
 
 // recursive algorithm to print the path
 PathFinder.prototype.getPath = function(node) {
-    if(node) {
+    if (node) {
         this.getPath(node.parent);
         // ignore start node
-        if(!this.areNodesEqual(this.startNode, node)) { 
+        if (!this.areNodesEqual(this.startNode, node)) { 
             this.path.unshift(node);
         } 
-        //console.log(node);
     }
 }
 
@@ -180,8 +179,6 @@ PathFinder.prototype.findPath = function(pathClearFunction) {
     var tile = this.getTile(this.start.x, this.start.y);
 
     this.goalNode = new Node(tile.i, tile.j, null, 0);
-    
-    console.log("goal x: ", this.goalNode.x, " goal y: ", this.goalNode.y);
     
     tile = this.getTile(this.goal.x, this.goal.y);
 
