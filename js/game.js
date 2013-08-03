@@ -425,7 +425,7 @@ AnimatedEntity.prototype.getAdjustedCoords = function(newX, newY) {
     };
 }
 // Class for our game's hero!
-function Hero(game, x, y, width, height) {
+function Hero(game, x, y, width, height, direction) {
     AnimatedEntity.call(this, game, x, y, width, height);
     this.image = ASSET_MANAGER.getAsset('images/hero.png');
     // the offsets (offsetX and offsetY) are for image retrieval from the sprite, NOT the coordinates of the hero
@@ -435,7 +435,7 @@ function Hero(game, x, y, width, height) {
     // this will change depending on the direction; 518 is for the sprite in going in the upward direction (default)
     this.scaleToX = 38; // 38
     this.scaleToY = 42; // 42
-    this.direction = 'up';
+    this.direction = typeof direction === 'undefined' ? 'up' : direction; 
     this.experience = 0;
     this.neededExperienceToLevel = 100;
     this.level = 1;
@@ -446,6 +446,7 @@ function Hero(game, x, y, width, height) {
     this.strength = 1;
     this.warnedLowHealth = false;
     this.warnedVeryLowHealth = false;
+    this.isInitialConfiguration = true;
     this.tellingDirection = false;
     this.adviceConfusedX = false; // if the advice is to keep going 'west' then 'east' vice-versa
     this.adviceConfusedY = false; // same as above for 'north' and 'south'
@@ -508,8 +509,13 @@ Hero.prototype.levelUp = function() {
 
 Hero.prototype.draw = function() {
     // pre-render and then draw the health bar
-    var offCanvas = document.createElement('canvas'), ctx = offCanvas.getContext('2d'), startDrawingX = 48, startDrawingY = this.game.frameHeight - 40, picWidth = 255, // was 255 before
-    barWidth = 200, picHeight = 30;
+    var offCanvas = document.createElement('canvas'), 
+        ctx = offCanvas.getContext('2d'), 
+        startDrawingX = 48, 
+        startDrawingY = this.game.frameHeight - 40, 
+        picWidth = 255,
+        barWidth = 200,
+        picHeight = 30;
 
     offCanvas.width = picWidth;
     offCanvas.height = picHeight;
@@ -723,11 +729,10 @@ Hero.prototype.update = function() {
     var delta = this.game.now ? this.getDeltaPosition() : 0, 
         baseOffsetY = 518, 
         punchOffset = 514;
-
+    
     switch (this.game.key) {
         case 38: // up arrow
-        case 87:
-            // 'W'
+        case 87: // 'W'
             if (this.isPathClear(this.x, this.y - delta)) {
                 this.y -= delta;
                 this.emitSound('sounds/walking.wav');
@@ -823,6 +828,21 @@ Hero.prototype.update = function() {
     } else {
         // recover health while not in combat
         this.recoverHealth();
+    }
+    
+    if (this.direction !== this.game.heroStartDirection) {
+        this.isInitialConfiguration = false;
+    }
+    
+    if (this.isInitialConfiguration) {
+            switch (this.direction) {
+                case 'up':
+                    this.offsetY = baseOffsetY;
+                    break;
+                case 'down':
+                    this.offsetY = baseOffsetY + this.height * 2;
+                    break;
+        }
     }
 
     /*else if() { // key is pressed, and an animation is going on => TRICKY
@@ -1314,12 +1334,8 @@ Dungeon.prototype.generateDungeon = function() {
     // after we generate this map, we have to make sure that there are no walls/enemies near the hero's start point
     this.markHeroTerritory(numTilesX, numTilesY);
     
-    // set the goal to be the top right corner
-    this.goalTileX = numTilesX - 2;
-    this.goalTileY = 0;
-    
-    // also make the tile to the left of the goal tile a free space
-    this.map[this.goalTileX - 1][this.goalTileY].type = 'F';
+    // make the goal tile a free space (no wall)
+    this.map[this.goalTileX][this.goalTileY].type = 'F';
     
     // as a last step, iterate the map as a two-dimensional matrix and generate the appropriate object at the (x, y) position
     for (var i = 0; i < numTilesX; ++i) {
@@ -1331,36 +1347,51 @@ Dungeon.prototype.generateDungeon = function() {
 }
 
 Dungeon.prototype.markHeroTerritory = function(numTilesX, numTilesY) {
+    // offsets for positioning the start 
+    var SAFETY_AREA_SIZE = 4, // safety area for the hero at the start of a dungeon level so that enemies aren't near
+        WALL_OFFSET = 2;
+        
     var possibleStartPos = [
         {x: 1, y: 1}, // top left
-        {x: numTilesX - 2, y: 1}, // top right
-        {x: numTilesX - 2, y: numTilesY - 2}, // bottom right
-        {x: 1, y: numTilesY} // bottom left
+        {x: numTilesX - SAFETY_AREA_SIZE, y: 1}, // top right
+        {x: numTilesX - SAFETY_AREA_SIZE, y: numTilesY - SAFETY_AREA_SIZE}, // bottom right
+        {x: 1, y: numTilesY - SAFETY_AREA_SIZE} // bottom left
         ];
         
     var possibleGoalPos = [
-        {x: numTilesX, y: numTilesY}, // bottom right corresponds to top left start
-        {x: 0, y: numTilesY}, // bottom left corresponds to top right start
+        {x: numTilesX - WALL_OFFSET, y: numTilesY - 1}, // bottom right corresponds to top left start
+        {x: 0, y: numTilesY - 1}, // bottom left corresponds to top right start
         {x: 0, y: 0}, // top left corresponds to bottom right start
-        {x: numTilesX, y : 0} // top right corresponds to bottom left start
+        {x: numTilesX - WALL_OFFSET, y : 0} // top right corresponds to bottom left start
     ];
     
     var randChoice = Math.floor(Math.random()*possibleStartPos.length),
         startPos = possibleStartPos[randChoice],
         goalPos = possibleGoalPos[randChoice];
     
-    // dimensions of the space
-    var space = 5;
-    console.log('randChoice: ' + randChoice);
+    // initialize the start position for the hero
+    this.game.HERO_STARTX = Math.ceil(startPos.x * this.tileSize);
+    this.game.HERO_STARTY = Math.ceil(startPos.y * this.tileSize);
     
-    var endX = Math.ceil(this.game.HERO_STARTX/this.game.dungeon.tileSize),
-        startY = Math.ceil(this.game.HERO_STARTY/this.game.dungeon.tileSize);
-        
-    for (var i = 1; i <= endX; ++i) {
-        for (var j = startY; j < numTilesY - 2; ++j) {
-            this.map[i][j].type = 'R';
+    // set the hero's initial direction depending on its start position
+    this.game.heroStartDirection = randChoice < 2 ? 'down' : 'up';
+    console.log(this.game.heroStartDirection);
+    // reserve the starting space for the hero so that there are no walls or enemies nearby
+    for (var x = startPos.x; x < startPos.x + SAFETY_AREA_SIZE; ++x) {
+        for (var y = startPos.y; y < startPos.y + SAFETY_AREA_SIZE; ++y) {
+            this.map[x][y].type = 'R';
         }
     }
+    
+    // set the position of the goal (aka the exit to complete the dungeon level)
+    this.goalTileX = goalPos.x;
+    this.goalTileY = goalPos.y;
+    
+    // connect both the hero and the goal to the nearest room
+    this.randDungeonGen.connectNearestRoomToPoint(startPos.x, startPos.y);
+    this.randDungeonGen.connectNearestRoomToPoint(goalPos.x, goalPos.y);
+    
+   
 }
 
 // return wall based on the map
@@ -1636,7 +1667,7 @@ GameEngine.prototype.update = function() {
 GameEngine.prototype.initHero = function() {
      // width = 64, height = 64
     // 50, frameHeight - 96
-    var hero = new Hero(this, this.HERO_STARTX, this.HERO_STARTY, 64, 64);
+    var hero = new Hero(this, this.HERO_STARTX, this.HERO_STARTY, 64, 64, this.heroStartDirection);
     hero.inventory = new Inventory(this);
     // new inventory for the hero
     hero.stats = new Stats(this);
@@ -1813,8 +1844,7 @@ function loadGame() {
                     
                 switch (entity.type) {
                     case 'Hero':
-                        newEntity = new Hero(game, entity.x, entity.y, 64, 64);
-                        newEntity.direction = entity.direction;
+                        newEntity = new Hero(game, entity.x, entity.y, 64, 64, entity.direction);
                         newEntity.level = entity.level;
                         newEntity.experience = entity.experience;
                         newEntity.neededExperienceToLevel = entity.neededExperienceToLevel;

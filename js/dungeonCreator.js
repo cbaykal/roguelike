@@ -599,8 +599,6 @@ RandomizeDungeon.prototype.connectRooms = function(room) {
         var startSide = this.pickRandomSide(previousRoom),
             endSide = this.pickRandomSide(currentRoom);
         
-        console.log(startSide);
-        console.log(endSide);
             
         var startPos = this.getRandomDoorLocation(previousRoom, startSide),
             endingPos = this.getRandomDoorLocation(currentRoom, endSide);
@@ -608,9 +606,6 @@ RandomizeDungeon.prototype.connectRooms = function(room) {
         this.generateCorridor(previousRoom, startSide, startPos.x, startPos.y, endSide, endingPos.x, endingPos.y);
            
     }
-    
-    // finally we need to connect the hero's start position with the nearest room 
-    this.game.START_HEROX
 }
 
 // function that generates the door on the side of the room specified
@@ -634,6 +629,7 @@ RandomizeDungeon.prototype.generateDoor = function(side, xPos, yPos) {
     } 
 }
 
+// generates a corridor from (startX, startY) to (endX, endY)
 RandomizeDungeon.prototype.generateCorridor = function(startRoom, startSide, startX, startY, endSide, endX, endY) {
     this.generateDoor(endSide, startX, startY);
     this.generateDoor(startSide, endX, endY);
@@ -649,9 +645,63 @@ RandomizeDungeon.prototype.generateCorridor = function(startRoom, startSide, sta
            //return this.game.dungeon.randDungeonGen.isNotInsideRoom(this.game.dungeon.randDungeonGen.startRoom, x, y);
            return true;
     });
+  
+    for (var i = 0; i < path.length; ++i) {
+       var node = path[i];
+           
+       this.map[node.x][node.y].type = 'F';
+       
+    }
+}
+
+// NOTE: For successful functionality, rooms.length should be > 0
+// Function connects the nearest room to the (x, y) passed in as arguments 
+// the x and y arguments must be passed in as ***TILE UNITS*** (not pixel coordinates)
+RandomizeDungeon.prototype.connectNearestRoomToPoint = function(x, y) {
+    /*
+     * TODO: DUPLICATE CODE HERE
+     */
+    
+    // implement sorted rooms functionality
+    var distances = [];
+     
+    // get the distances of each point to the passed in (x, y)
+    for (var i = 0; i < this.rooms.length; ++i) {
+       this.rooms[i].distance = this.getPseudoDistance(x, y, this.rooms[i].x, this.rooms[i].y); 
+       distances.push(this.rooms[i].distance);
+    }
+    
+    // sort the array
+    distances.sort(function (a, b) { return a-b; });
+    
+    // the minimum distance is the first element in the array
+    var minDistance = distances[0],
+        nearestRoom = null; // will contain the room object with the closest distnace
+    
+    // find the room with this minimum distance property
+    for (var i = 0; i < this.rooms.length; ++i) {
+        if (this.rooms[i].distance === minDistance) {
+            nearestRoom = this.rooms[i];
+        }
+    }
+    
+    // alter the x and y values of the room.x and room.y as a goal configuration so that
+    // we are sure to have a clear path to the room
+    var goalX = nearestRoom.x >= this.numTilesX - 1 ? nearestRoom.x : nearestRoom.x + 1,
+        goalY = nearestRoom.y >= this.numTilesY - 1 ? nearestRoom.y : nearestRoom.y + 1;
+    
+    // now find the path from the given (x, y) to this room
+    var pathFinder = new PathFinder(this.game, 
+                               new Goal(this, this.game, x*this.game.dungeon.tileSize, y*this.game.dungeon.tileSize),
+                               new Goal(this, this.game, goalX*this.game.dungeon.tileSize, goalY*this.game.dungeon.tileSize));
+                                     
+    
+    path = pathFinder.findPath(function() {
+        return true;
+    });
     
     console.log(path);
-  
+    
     for (var i = 0; i < path.length; ++i) {
        var node = path[i];
            
