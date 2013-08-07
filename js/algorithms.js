@@ -176,11 +176,18 @@ PathFinder.prototype.getPath = function(node) {
     }
 }
 
-PathFinder.prototype.findPath = function(pathClearFunction) {
+PathFinder.prototype.findPath = function(useAdjustedCoords, pathClearFunction) {
+    useAdjustedCoords = typeof useAdjustedCoords === 'undefined' ? false : useAdjustedCoords;
     // declare the goal node
    // var tile = this.getTile(this.start.x, this.start.y);
-    var tile = this.getTile(this.goal.x, this.goal.y);
-
+    var tile;
+    if (useAdjustedCoords) {
+        var pos = this.goal.getAdjustedCoords(this.goal.x, this.goal.y);
+        tile = this.getTile(pos.x, pos.y);
+    } else {
+        tile = this.getTile(this.goal.x, this.goal.y);
+    }
+    
     this.goalNode = new Node(tile.i, tile.j, null, 0);
     
     //tile = this.getTile(this.goal.x, this.goal.y);

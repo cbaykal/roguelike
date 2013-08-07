@@ -25,9 +25,7 @@ Goal.prototype.isPathClear = function(x, y) {
     var x = Math.floor(x/this.game.dungeon.tileSize),
         y = Math.floor(y/this.game.dungeon.tileSize);
     
-    console.log('x: ' + x);
-    console.log('y: ' + y);
-    console.log(this.randDungeon.isValidVertex(x, y));
+
     if (this.randDungeon.isValidVertex(x, y) && (this.randDungeon.map[x][y].type === 'F' || this.randDungeon.map[x][y].type === 'M')) {
         return true;
     }
@@ -648,7 +646,7 @@ RandomizeDungeon.prototype.generateCorridor = function(startRoom, startSide, sta
     
     this.startRoom = startRoom;
     
-    var path = pathFinder.findPath(function(x, y) {
+    var path = pathFinder.findPath(false, function(x, y) {
            //return this.game.dungeon.randDungeonGen.isNotInsideRoom(this.game.dungeon.randDungeonGen.startRoom, x, y);
            return true;
     });
@@ -705,7 +703,7 @@ RandomizeDungeon.prototype.connectNearestRoomToPoint = function(x, y) {
                                new Goal(this, this.game, goalX*this.game.dungeon.tileSize, goalY*this.game.dungeon.tileSize));
                                      
     
-    path = pathFinder.findPath(function() {
+    path = pathFinder.findPath(false, function() {
         return true;
     });
     

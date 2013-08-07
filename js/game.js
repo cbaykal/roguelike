@@ -256,7 +256,9 @@ AnimatedEntity.prototype.getDeltaPosition = function() {
     // to avoid wormholes
 }
 var count = 0;
+
 // check the proposed x and y bounds and see whether we can move there
+// x and y are in pixels
 AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, compareEntities, considerHero) {
     var compareEntities = typeof compareEntities === 'undefined' ? true : compareEntities, 
         considerHero = typeof considerHero === 'undefined' ? true : considerHero;
@@ -267,18 +269,14 @@ AnimatedEntity.prototype.isPathClear = function(newX, newY, useAdjustedCoords, c
         y : newY
     };
    
+   var numTilesX = Math.ceil(this.game.frameWidth / this.game.dungeon.tileSize),
+       numTilesY = Math.ceil(this.game.frameHeight / this.game.dungeon.tileSize);
+        
     // gets the corresponding tile number (i and j) for use in retrieval in map
     var tileX = Math.floor(adjustedCoords.x / this.game.dungeon.tileSize),
         tileY = Math.floor(adjustedCoords.y / this.game.dungeon.tileSize);
 
-    var i = tileX < 0 ? 1 : tileX, 
-        j = tileY < 0 ? 1 : tileY;
-
-    if (i < 0 || j < 0 || i > 49 || j > 26) {
-        alert('error! \ni: ' + i + '\nj: ' + j);
-    }
-
-    if (this.game.dungeon.map[i][j].type === 'W' ) {
+    if (tileX >= 0 && tileX < numTilesX && tileY >= 0 && tileY < numTilesY && this.game.dungeon.map[tileX][tileY].type === 'W') {
         return false;  // there's a wall, so obviously can't move there
     }
 
@@ -599,22 +597,31 @@ Hero.prototype.isAtGoal = function() {
 // tell the player where to go
 Hero.prototype.sayDirection = function() {
     // use A* path planning to find the correct way to go
-    var planner = new PathFinder(this.game, this,
+    var adjustedCoords = this.getAdjustedCoords(this.x, this.y),
+        planner = new PathFinder(this.game, 
+                        /*new Goal(this.game.dungeon.randDungeonGen, this.game, adjustedCoords.x*this.game.dungeon.tileSize,
+                                  adjustedCoords.y*this.game.dungeon.tileSize),*/
+                                 this,
                          new Goal(this.game.dungeon.randDungeonGen, this.game, this.game.dungeon.goalTileX*this.game.dungeon.tileSize,
                                   this.game.dungeon.goalTileY*this.game.dungeon.tileSize)),
-        path = planner.findPath(),  // the whole path
+        path = planner.findPath(true/*function(x, y) {
+           // return this.game.hero.isPathClear(x, y, true, false, false);
+        }*/),  // the whole path
         next = path[1], // the next tile to go to
-        adjustedCoords = this.getAdjustedCoords(this.x, this.y),
         currentTileX = Math.floor((adjustedCoords.x)/this.game.dungeon.tileSize),
         currentTileY = Math.floor((adjustedCoords.y)/this.game.dungeon.tileSize),
+        //currentTileX = Math.floor(this.x/this.game.dungeon.tileSize),
+        //currentTileY = Math.floor(this.y/this.game.dungeon.tileSize),
         rand = Math.random(),
         that = this,
         advice = '';
         
-    console.log('printing planner');
-    console.log(planner);
+    console.log(path);
+    console.log("(" + currentTileX + ", " + currentTileY + ")");
+    console.log("(" + Math.floor(this.x/this.game.dungeon.tileSize) + ", " + Math.floor(this.y/this.game.dungeon.tileSize) + ")");
     // get the advice
-    this.advice = this.getAdvice(path, 1, currentTileX, currentTileY, null);
+    //this.advice = this.getAdvice(path, 1, currentTileX, currentTileY, null);
+    this.advice = this.getAdvice(path, 0, path[0].x, path[0].y, null);
     
     // tell the player the correct direction to go
     myAudio.say(this.game.voice, this.game.language, this.advice + '.');
@@ -632,11 +639,22 @@ Hero.prototype.getAdvice = function(path, indexToConsider, currentTileX, current
     }
     
     var next = path[indexToConsider],
+    /*var next = this.getAdjustedCoords(path[indexToConsider].x*this.game.dungeon.tileSize, path[indexToConsider].y*this.game.dungeon.tileSize);
+    next.x = Math.floor(next.x/this.game.dungeon.tileSize);
+    next.y = Math.floor(next.y/this.game.dungeon.tileSize);*/
         dx = next.x - currentTileX,
         dy = next.y - currentTileY,
         actualDx = 0, // the proposed change to x based on advice
         actualDy = 0, // the proposed change to y based on advice
         advice = 'Go ';
+    
+    console.log('next');
+    console.log(next);
+    console.log('dx: ', dx, ' dy: ', dy);
+    // if we are already there, consider the next index
+    if (dx === 0 && dy === 0) {
+        this.getAdvice(path, ++indexToConsider, currentTileX, currentTileY, failedAdvice);
+    }
 
     if (Math.random() < 0.5) {
         if (dy !== 0 && !this.adviceConfusedY) {
