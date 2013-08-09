@@ -388,6 +388,7 @@ AnimatedEntity.prototype.attackEnemy = function() {
 }
 // in most cases, we have to adjust the coordinates accordingly
 // for the collision detection to look more natural
+// args: newX and newY must be in pixels (not tiles!)
 AnimatedEntity.prototype.getAdjustedCoords = function(newX, newY) {
     var x = null,
         y = null;
@@ -648,9 +649,6 @@ Hero.prototype.getAdvice = function(path, indexToConsider, currentTileX, current
         actualDy = 0, // the proposed change to y based on advice
         advice = 'Go ';
     
-    console.log('next');
-    console.log(next);
-    console.log('dx: ', dx, ' dy: ', dy);
     // if we are already there, consider the next index
     if (dx === 0 && dy === 0) {
         this.getAdvice(path, ++indexToConsider, currentTileX, currentTileY, failedAdvice);
@@ -752,7 +750,7 @@ Hero.prototype.update = function() {
     switch (this.game.key) {
         case 38: // up arrow
         case 87: // 'W'
-            if (this.isPathClear(this.x, this.y - delta)) {
+            if (this.isPathClear(this.x, this.y - delta, true)) {
                 this.y -= delta;
                 this.emitSound('sounds/walking.wav');
             } else {
@@ -764,7 +762,7 @@ Hero.prototype.update = function() {
             break;
         case 40: // down arrow
         case 83: // 'S'
-            if (this.isPathClear(this.x, this.y + delta)) {
+            if (this.isPathClear(this.x, this.y + delta, true)) {
                 this.y += delta;
                 this.emitSound('sounds/walking.wav');
             } else {
@@ -776,7 +774,7 @@ Hero.prototype.update = function() {
             break;
         case 37: // left
         case 65: // 'A'
-            if (this.isPathClear(this.x - delta, this.y)) {
+            if (this.isPathClear(this.x - delta, this.y, true)) {
                 this.x -= delta;
                 this.emitSound('sounds/walking.wav');
             } else {
@@ -788,7 +786,7 @@ Hero.prototype.update = function() {
             break;
         case 39: // right
         case 68: // 'D'
-            if (this.isPathClear(this.x + delta, this.y)) {
+            if (this.isPathClear(this.x + delta, this.y, true)) {
                 this.x += delta;
                 this.emitSound('sounds/walking.wav');
             } else {
@@ -1045,18 +1043,27 @@ Enemy.prototype.getDirection = function() {
     // if there is no path at hand, or we need to update our path...
     if (!this.path || !this.pathLastUpdated || (this.game.now - this.pathLastUpdated) >= timerDelta) {
         var planner = new PathFinder(this.game, this.game.hero, this),
-            foundPath = planner.findPath();
+            foundPath = planner.findPath(true);
        // console.log('forcing path find');
         // update the path if there were no errors in finding it
         this.path = (foundPath || !this.path) ? foundPath : this.path;
+        if (this.path.length > 0) {
+            //this.path.pop();
+        }
         this.pathLastUpdated = this.game.now; // record the last updated time
+        //this.goalX = null;
+        //this.goalY = null;
     }
 
     // if we are not at the goal position, we need to find the next step on our path to hero
-    if (!this.goalX && !this.goalY || this.isAtGoalPosition()) {
+    if ((!this.goalX && !this.goalY) || this.isAtGoalPosition()) {
         var tile = this.path.pop();
+        console.log(tile);
+        var pos = this.getAdjustedCoords(this.x, this.y);
+        console.log('x: ' + Math.floor(pos.x/this.game.dungeon.tileSize));
+        console.log('y: ' + Math.floor(pos.y/this.game.dungeon.tileSize));
         // pop the tile that we need to go to
-        if ( typeof tile === 'undefined' || this.path.length === 0) {// out of path tiles, start attacking
+        if (typeof tile === 'undefined' || this.path.length === 0) {// out of path tiles, start attacking
             this.attackingDirection = this.direction === 'punch' ? this.attackingDirection : this.direction;
             return 'punch';
         }
@@ -1064,22 +1071,39 @@ Enemy.prototype.getDirection = function() {
         this.goalX = tile.x * this.game.dungeon.tileSize;
         this.goalY = tile.y * this.game.dungeon.tileSize;
     }
-
-    var distThreshold = 5;
+    
+    var adjustedPos = this.getAdjustedCoords(this.x, this.y),
+        posInTiles = {
+            x: Math.floor(adjustedPos.x/this.game.dungeon.tileSize),
+            y: Math.floor(adjustedPos.y/this.game.dungeon.tileSize)
+        },
+        goalInTiles = {
+            x: Math.floor(this.goalX/this.game.dungeon.tileSize),
+            y: Math.floor(this.goalY/this.game.dungeon.tileSize)
+        };
+        
     // decide on the direction based on the current position relative to the goal position
-    if (this.goalX !== this.x) {
-        if (this.goalX < this.x) {// goal lies to the left
+    if (goalInTiles.x !== posInTiles.x) {
+        if (goalInTiles.x < posInTiles.x) {// goal lies to the left
             direction = 'left';
         } else {
             direction = 'right';
         }
     } else {
-        if (this.goalY < this.y) {
+        if (goalInTiles.y < posInTiles.y) {
             direction = 'up';
         } else {
             direction = 'down';
         }
     }
+    
+    var pos = this.getAdjustedCoords(this.x, this.y);
+    console.log('x: ' + Math.floor(pos.x/this.game.dungeon.tileSize));
+    console.log('y: ' + Math.floor(pos.y/this.game.dungeon.tileSize));
+    console.log('goalX: ' + Math.floor(Math.floor(this.goalX/this.game.dungeon.tileSize)));
+    console.log('goalY: ' + Math.floor(Math.floor(this.goalY/this.game.dungeon.tileSize)));
+    console.log(this.path);
+    console.log('DIRECTION: ', direction);
     return direction;
 }
 
@@ -1101,9 +1125,18 @@ Enemy.prototype.isAtGoalPosition = function() {
     var enemyRect = new Rectangle(this.x, this.x + this.scaleToX, this.y, this.y + this.scaleToY),
          heroRect = new Rectangle(this.game.hero.x, this.game.hero.x + this.game.hero.scaleToX,
                                   this.game.hero.y, this.game.hero.y + this.game.hero.scaleToY);
-
-    if (enemyRect.isIntersecting(heroRect) || (this.x <= this.goalX && this.x + this.scaleToX >= this.goalX) 
-        && (this.y <= this.goalY && this.y + this.scaleToY >= this.goalY)) {
+       
+     // ge tthe adjusted coordinates and the
+     var pos = this.getAdjustedCoords(this.x, this.y);
+     
+     
+     pos.x = Math.floor(pos.x/this.game.dungeon.tileSize);
+     pos.y = Math.floor(pos.y/this.game.dungeon.tileSize);
+          
+   /* if (enemyRect.isIntersecting(heroRect) || (this.x <= this.goalX && this.x + this.scaleToX >= this.goalX) 
+        && (this.y <= this.goalY && this.y + this.scaleToY >= this.goalY)) {*/
+    if (enemyRect.isIntersecting(heroRect) || 
+        (pos.x === Math.floor(this.goalX/this.game.dungeon.tileSize) && pos.y === Math.floor(this.goalY/this.game.dungeon.tileSize))) {
         return true;
     }
     return false;
