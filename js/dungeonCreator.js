@@ -30,7 +30,6 @@ Goal.prototype.isPathClear = function(x, y) {
         return true;
     }
     
-    console.log('RETURNING FALSE');
     return false;
 }
 /*
@@ -590,23 +589,36 @@ RandomizeDungeon.prototype.connectRooms = function(room) {
     
     for (var i = 0; i < distances.length; ++i) {
         for (var j = 0; j < this.rooms.length; ++j) {
-            if (this.rooms[j].distance === distances[i]) {
+            if (this.rooms[j].distance === distances[i] && sortedRooms.indexOf(this.rooms[j]) === -1) {
                 sortedRooms.push(this.rooms[j]);
             }
         }
     }
+    console.log('Length of distances array: ' + distances.length);
+    console.log('Length of unsorted rooms: ' + this.rooms.length);
+    console.log('Length of sorted rooms: ' + sortedRooms.length);
     
+    if (this.rooms.length !== sortedRooms.length) {
+        // DEBUG
+        alert('ERROR: Array size mismatch while connecting rooms');
+    }
     // now let's go through the sorted rooms and connect them
-    for (var i = 1; i < this.rooms.length; ++i) {
+    for (var i = 1; i < sortedRooms.length; ++i) {
         var previousRoom = sortedRooms[i - 1],
             currentRoom = sortedRooms[i];
         
         var startSide = this.pickRandomSide(previousRoom),
             endSide = this.pickRandomSide(currentRoom);
         
+        if (!startSide || !endSide) {
+            console.log('SIDE FAILED');
+            console.log(startSide);
+            console.log(endSide);
+        }
          
         var startPos = this.getRandomDoorLocation(previousRoom, startSide),
             endingPos = this.getRandomDoorLocation(currentRoom, endSide);
+
         // now generate the corridor
         this.generateCorridor(previousRoom, startSide, startPos.x, startPos.y, endSide, endingPos.x, endingPos.y);
            
@@ -655,7 +667,7 @@ RandomizeDungeon.prototype.generateCorridor = function(startRoom, startSide, sta
         console.log('PATH IS UNDEFINED WHILE CONNECTING ROOMS:');
         console.log(path);
     }
-  
+    
     for (var i = 0; i < path.length; ++i) {
        var node = path[i];
            
@@ -707,6 +719,10 @@ RandomizeDungeon.prototype.connectNearestRoomToPoint = function(x, y) {
         return true;
     });
     
+    if (!path) {
+        console.log('COULD NOT FIND PATH');
+    }
+    // the corridor is formed by iterating over the path and replacing the wall tiles with free space
     for (var i = 0; i < path.length; ++i) {
        var node = path[i];
        this.map[node.x][node.y].type = 'F';

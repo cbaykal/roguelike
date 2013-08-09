@@ -806,6 +806,11 @@ Hero.prototype.update = function() {
             this.direction = 'punch';
             this.emitSound('sounds/punch.wav', false);
             break;
+
+        case 77: // "m" was pressed. Tell the user how many enemies are left
+            this.sayEnemyCount();
+            break;
+            
         case 72: // h for help
             // tell the user via speech where to go
             if (!this.tellingDirection) {
@@ -813,18 +818,19 @@ Hero.prototype.update = function() {
                 this.tellingDirection = true;
                 this.sayDirection();
             }
-            
             break;
-        case 77: // "m" was pressed. Tell the user how many enemies are left
-            this.sayEnemyCount();
-                       
-        // *PURPOSEFULLY avoiding a break here (in order to reset key)*
+            
         default:
             this.game.key = null;
             this.game.previousKey = null;
             if (this.direction !== 'punch') {
                 this.stopSound();
             }
+    }
+    
+    if (this.game.key === 77 || this.game.key === 72) {
+        this.game.key = null;
+        this.game.previousKey = null;
     }
 
     if (!this.game.key && this.animation && this.direction !== 'punch') {// hero is currently animated, but no key is pressed => end animation
@@ -1096,11 +1102,13 @@ Enemy.prototype.isAtGoalPosition = function() {
          heroRect = new Rectangle(this.game.hero.x, this.game.hero.x + this.game.hero.scaleToX,
                                   this.game.hero.y, this.game.hero.y + this.game.hero.scaleToY);
 
-    if (enemyRect.isIntersecting(heroRect) || (this.x <= this.goalX && this.x + this.scaleToX >= this.goalX) && (this.y <= this.goalY && this.y + this.scaleToY >= this.goalY)) {
+    if (enemyRect.isIntersecting(heroRect) || (this.x <= this.goalX && this.x + this.scaleToX >= this.goalX) 
+        && (this.y <= this.goalY && this.y + this.scaleToY >= this.goalY)) {
         return true;
     }
     return false;
 }
+
 // have the enemy move around to make it look more alive
 Enemy.prototype.wanderAround = function() {
     var rand = Math.random(), walkDist = Math.ceil(Math.random() * 50) + 30;
@@ -1378,10 +1386,10 @@ Dungeon.prototype.markHeroTerritory = function(numTilesX, numTilesY) {
         ];
         
     var possibleGoalPos = [
-        {x: numTilesX - WALL_OFFSET, y: numTilesY - 1}, // bottom right corresponds to top left start
-        {x: 0, y: numTilesY - 1}, // bottom left corresponds to top right start
-        {x: 0, y: 0}, // top left corresponds to bottom right start
-        {x: numTilesX - WALL_OFFSET, y : 0} // top right corresponds to bottom left start
+        {x: numTilesX - WALL_OFFSET, y: numTilesY - WALL_OFFSET}, // bottom right corresponds to top left start
+        {x: 1, y: numTilesY - WALL_OFFSET}, // bottom left corresponds to top right start
+        {x: 1, y: 1}, // top left corresponds to bottom right start
+        {x: numTilesX - WALL_OFFSET, y : 1} // top right corresponds to bottom left start
     ];
     
     var randChoice = Math.floor(Math.random()*possibleStartPos.length),
@@ -1550,8 +1558,8 @@ function GameEngine(ctx) {
     this.msgLog = new MessageLog(this.voice, this.language);
     this.HERO_STARTX = 50;
     this.HERO_STARTY = this.frameHeight - 96;
-    this.ENEMY_PROBABILITY =/* 1e-2 + this.dungeonLevel/1e2;*/ 0; // 5e-2; 2e-2
-    this.MISC_PROBABILITY = /*1e-2;*/ 0;
+    this.ENEMY_PROBABILITY = 1e-2 + this.dungeonLevel/1e2;
+    this.MISC_PROBABILITY = 1e-2;;
     this.GEM_COLORS = ['blue', 'green', 'red']; // 5e-3
 }
 
