@@ -372,11 +372,11 @@ function RandomizeDungeon(game, numTilesX, numTilesY) {
     this.numTilesY = numTilesY;
     this.rooms = [] // list containing the rooms in the map (Room objects)
     this.map = [[]] // multi-dimensional array to keep track of the map's contents
-    this.roomCount = 6; // number of rooms in the map
+    this.roomCount = 5; // number of rooms in the map
     this.minRoomWidth = 10;
-    this.maxRoomWidth = 12;
+    this.maxRoomWidth = 14;
     this.minRoomHeight = 10;
-    this.maxRoomHeight = 12;
+    this.maxRoomHeight = 14;
     this.numGenTries = 0;
     this.maxGenTries = 1e3;
     this.roomCorridorOffset = 3;
@@ -569,10 +569,6 @@ RandomizeDungeon.prototype.pickRandomSide = function(room) {
     
     if (room.x + room.width <= this.numTilesX - breathingRoomTiles && !this.hasSideBeenUsed('right', room)) {
         options.push('right');
-    }
-    
-    if (options.length === 0) {
-        alert('ERROR: options.length === 0');
     }
     
     return options[Math.floor(Math.random()*options.length)];
