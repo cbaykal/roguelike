@@ -27,7 +27,7 @@ HighScores.prototype.getScores = function() {
 HighScores.prototype.ajaxRequest = function(data, callback) {
     $.ajax({
         type: 'POST',
-        url: 'high_scores.php',
+        url: 'php/high_scores.php',
         data: data
     }).done(function(data) {
        callback(data);
