@@ -1098,12 +1098,6 @@ Enemy.prototype.getDirection = function() {
     }
     
     var pos = this.getAdjustedCoords(this.x, this.y);
-    console.log('x: ' + Math.floor(pos.x/this.game.dungeon.tileSize));
-    console.log('y: ' + Math.floor(pos.y/this.game.dungeon.tileSize));
-    console.log('goalX: ' + Math.floor(Math.floor(this.goalX/this.game.dungeon.tileSize)));
-    console.log('goalY: ' + Math.floor(Math.floor(this.goalY/this.game.dungeon.tileSize)));
-    console.log(this.path);
-    console.log('DIRECTION: ', direction);
     return direction;
 }
 
@@ -2043,6 +2037,9 @@ $(function() {
     // initialize myAudio object for text to speech use
     myAudio.initialize();
     myAudio.say(voice, language, 'Welcome to Dungeon Quest, press TAB to navigate menu');
+    
+    // initialize High Scores
+    var highScores = new HighScores();
     
     // game menu code
     var $gameLinks = $('#gameMenu').find('a'),
